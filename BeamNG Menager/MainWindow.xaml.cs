@@ -7,6 +7,8 @@ using System.IO.Compression;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
+using System.Security.Cryptography;
+using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -996,7 +998,7 @@ namespace BeamNGModManager
             }
         }
 
-        private void CatalogTile_Click(
+        private async void CatalogTile_Click(
             object sender,
             System.Windows.Input.MouseButtonEventArgs e)
         {
@@ -1006,8 +1008,7 @@ namespace BeamNGModManager
                 return;
             }
 
-            CatalogDetailView.DataContext = null;
-            CatalogDetailView.DataContext = mod;
+            e.Handled = true;
 
             CatalogBrowseView.Visibility =
                 Visibility.Collapsed;
@@ -1015,11 +1016,34 @@ namespace BeamNGModManager
             CatalogDetailView.Visibility =
                 Visibility.Visible;
 
+            CatalogDetailView.DataContext =
+                mod;
+
+            if (!mod.DetailsLoaded)
+            {
+                CatalogStatusText.Text =
+                    "Wczytywanie szczegółów: " +
+                    mod.Title +
+                    "...";
+
+                try
+                {
+                    await LoadBeamNgModDetailsAsync(
+                        mod);
+                }
+                catch
+                {
+                    // Zostawiamy dane z katalogu, jeśli strona
+                    // szczegółów chwilowo nie odpowiada.
+                }
+
+                CatalogDetailView.DataContext = null;
+                CatalogDetailView.DataContext = mod;
+            }
+
             CatalogStatusText.Text =
                 "Szczegóły: " +
                 mod.Title;
-
-            e.Handled = true;
         }
 
         private void CatalogDetailBackButton_Click(
@@ -1058,10 +1082,13 @@ namespace BeamNGModManager
                 catalogMods =
                     await LoadBeamNgCatalogAsync();
 
-                CatalogStatusText.Text =
-                    "Wczytywanie zdjęć i szczegółów modów...";
+                CatalogTiles.ItemsSource = null;
+                CatalogTiles.ItemsSource = catalogMods;
 
-                await EnrichBeamNgCatalogAsync(
+                CatalogStatusText.Text =
+                    "Wczytywanie miniaturek...";
+
+                await CacheCatalogThumbnailsAsync(
                     catalogMods);
 
                 CatalogTiles.ItemsSource = null;
@@ -1085,20 +1112,361 @@ namespace BeamNGModManager
             }
         }
 
-        private async Task<List<CatalogMod>> SafeLoadCatalogAsync(
-            Func<Task<List<CatalogMod>>> loader)
+        private async Task<List<CatalogMod>> LoadBeamNgCatalogAsync()
         {
-            try
+            const string pageUrl =
+                "https://www.beamng.com/resources/?order=resource_date";
+
+            string html =
+                await httpClient.GetStringAsync(
+                    pageUrl);
+
+            Uri pageUri =
+                new Uri(pageUrl);
+
+            List<CatalogMod> result =
+                new List<CatalogMod>();
+
+            HashSet<string> seen =
+                new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            List<string> cards =
+                ExtractBeamNgResourceCards(
+                    html);
+
+            foreach (string card in cards)
             {
-                return await loader();
+                CatalogMod? mod =
+                    ParseBeamNgResourceCard(
+                        card,
+                        pageUri);
+
+                if (mod == null ||
+                    !seen.Add(mod.ResourceUrl))
+                {
+                    continue;
+                }
+
+                result.Add(mod);
+
+                if (result.Count >= 24)
+                {
+                    break;
+                }
             }
-            catch
+
+            if (result.Count == 0)
             {
-                return new List<CatalogMod>();
+                // Awaryjny parser dla sytuacji, gdy BeamNG zmieni
+                // opakowanie listy, ale zachowa linki do zasobów.
+                string listingHtml =
+                    GetBeamNgListingRegion(
+                        html);
+
+                Regex linkRegex =
+                    new Regex(
+                        "href=[\\\"'](?<url>(?:https://www\\.beamng\\.com)?/?resources/(?<slug>[^/\\\"'#?]+\\.[0-9]+)/?)[\\\"'][^>]*>(?<title>.*?)</a>",
+                        RegexOptions.IgnoreCase |
+                        RegexOptions.Singleline);
+
+                foreach (Match match in linkRegex.Matches(
+                    listingHtml))
+                {
+                    string title =
+                        StripHtml(
+                            match.Groups["title"].Value);
+
+                    if (!IsValidResourceTitle(title))
+                    {
+                        continue;
+                    }
+
+                    string absoluteUrl =
+                        MakeAbsoluteUrl(
+                            WebUtility.HtmlDecode(
+                                match.Groups["url"].Value),
+                            pageUri);
+
+                    if (!seen.Add(absoluteUrl))
+                    {
+                        continue;
+                    }
+
+                    string nearby =
+                        GetNearbyHtml(
+                            listingHtml,
+                            match.Index,
+                            2600);
+
+                    result.Add(
+                        new CatalogMod
+                        {
+                            Title = title,
+                            Source = "Repo BeamNG",
+                            Author =
+                                ExtractBeamNgAuthor(
+                                    nearby),
+                            Category =
+                                ExtractBeamNgCategory(
+                                    nearby),
+                            Version =
+                                ExtractBeamNgCardVersion(
+                                    nearby),
+                            Description =
+                                ExtractBeamNgCardDescription(
+                                    nearby),
+                            ThumbnailUrl =
+                                ExtractThumbnailUrl(
+                                    nearby,
+                                    pageUri),
+                            ResourceUrl =
+                                absoluteUrl
+                        });
+
+                    if (result.Count >= 24)
+                    {
+                        break;
+                    }
+                }
             }
+
+            return result;
         }
 
-        private async Task EnrichBeamNgCatalogAsync(
+        private List<string> ExtractBeamNgResourceCards(
+            string html)
+        {
+            string[] patterns =
+            {
+                "<li\\b[^>]*class=[\\\"'][^\\\"']*resourceListItem[^\\\"']*[\\\"'][^>]*>(?<card>.*?)</li>",
+                "<article\\b[^>]*class=[\\\"'][^\\\"']*(?:resource|structItem)[^\\\"']*[\\\"'][^>]*>(?<card>.*?)</article>"
+            };
+
+            foreach (string pattern in patterns)
+            {
+                MatchCollection matches =
+                    Regex.Matches(
+                        html,
+                        pattern,
+                        RegexOptions.IgnoreCase |
+                        RegexOptions.Singleline);
+
+                if (matches.Count == 0)
+                {
+                    continue;
+                }
+
+                return matches
+                    .Cast<Match>()
+                    .Select(match =>
+                        match.Value)
+                    .ToList();
+            }
+
+            return new List<string>();
+        }
+
+        private CatalogMod? ParseBeamNgResourceCard(
+            string card,
+            Uri pageUri)
+        {
+            Regex linkRegex =
+                new Regex(
+                    "href=[\\\"'](?<url>(?:https://www\\.beamng\\.com)?/?resources/(?<slug>[^/\\\"'#?]+\\.[0-9]+)/?)[\\\"'][^>]*>(?<title>.*?)</a>",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            MatchCollection matches =
+                linkRegex.Matches(card);
+
+            Match? resourceMatch = null;
+            string title = "";
+
+            foreach (Match match in matches)
+            {
+                string candidate =
+                    StripHtml(
+                        match.Groups["title"].Value);
+
+                if (!IsValidResourceTitle(candidate))
+                {
+                    continue;
+                }
+
+                resourceMatch = match;
+                title = candidate;
+                break;
+            }
+
+            if (resourceMatch == null)
+            {
+                return null;
+            }
+
+            string resourceUrl =
+                MakeAbsoluteUrl(
+                    WebUtility.HtmlDecode(
+                        resourceMatch.Groups["url"].Value),
+                    pageUri);
+
+            return new CatalogMod
+            {
+                Title = title,
+                Source = "Repo BeamNG",
+                Author =
+                    ExtractBeamNgAuthor(
+                        card),
+                Category =
+                    ExtractBeamNgCategory(
+                        card),
+                Version =
+                    ExtractBeamNgCardVersion(
+                        card),
+                Description =
+                    ExtractBeamNgCardDescription(
+                        card),
+                ThumbnailUrl =
+                    ExtractThumbnailUrl(
+                        card,
+                        pageUri),
+                ResourceUrl =
+                    resourceUrl
+            };
+        }
+
+        private bool IsValidResourceTitle(
+            string title)
+        {
+            if (string.IsNullOrWhiteSpace(title) ||
+                title.Length < 2)
+            {
+                return false;
+            }
+
+            string[] invalid =
+            {
+                "Vehicles",
+                "Scenarios",
+                "Terrains, Levels, Maps",
+                "User Interface Apps",
+                "Sounds",
+                "License Plates",
+                "Track Builder",
+                "Mods of Mods",
+                "Skins",
+                "Automation",
+                "Image",
+                "Download Now"
+            };
+
+            return !invalid.Any(value =>
+                title.Equals(
+                    value,
+                    StringComparison.OrdinalIgnoreCase));
+        }
+
+        private string GetBeamNgListingRegion(
+            string html)
+        {
+            Match listMatch =
+                Regex.Match(
+                    html,
+                    "<ol\\b[^>]*class=[\\\"'][^\\\"']*resourceList[^\\\"']*[\\\"'][^>]*>",
+                    RegexOptions.IgnoreCase);
+
+            if (listMatch.Success)
+            {
+                return html.Substring(
+                    listMatch.Index);
+            }
+
+            int marker =
+                html.LastIndexOf(
+                    "order=resource_date",
+                    StringComparison.OrdinalIgnoreCase);
+
+            return marker >= 0
+                ? html.Substring(marker)
+                : html;
+        }
+
+        private string ExtractBeamNgAuthor(
+            string html)
+        {
+            string author =
+                ExtractFirstText(
+                    html,
+                    "class=[\\\"'][^\\\"']*(?:username|username--style)[^\\\"']*[\\\"'][^>]*>(?<text>.*?)</a>");
+
+            if (!string.IsNullOrWhiteSpace(author))
+            {
+                return author;
+            }
+
+            author =
+                ExtractFirstText(
+                    html,
+                    "href=[\\\"'][^\\\"']*/members/[^\\\"']+[\\\"'][^>]*>(?<text>.*?)</a>");
+
+            return string.IsNullOrWhiteSpace(author)
+                ? "—"
+                : author;
+        }
+
+        private string ExtractBeamNgCategory(
+            string html)
+        {
+            string category =
+                ExtractFirstText(
+                    html,
+                    "href=[\\\"'][^\\\"']*/resources/categories/[^\\\"']+[\\\"'][^>]*>(?<text>.*?)</a>");
+
+            return string.IsNullOrWhiteSpace(category)
+                ? "Repo"
+                : category;
+        }
+
+        private string ExtractBeamNgCardVersion(
+            string html)
+        {
+            string version =
+                ExtractFirstText(
+                    html,
+                    "<(?:span|div)[^>]*class=[\\\"'][^\\\"']*version[^\\\"']*[\\\"'][^>]*>(?<text>.*?)</(?:span|div)>");
+
+            return string.IsNullOrWhiteSpace(version)
+                ? "—"
+                : version;
+        }
+
+        private string ExtractBeamNgCardDescription(
+            string html)
+        {
+            string[] patterns =
+            {
+                "<(?:div|p)[^>]*class=[\\\"'][^\\\"']*(?:tagLine|resourceTagLine|resourceDescription)[^\\\"']*[\\\"'][^>]*>(?<text>.*?)</(?:div|p)>",
+                "<p[^>]*>(?<text>.*?)</p>"
+            };
+
+            foreach (string pattern in patterns)
+            {
+                string description =
+                    ExtractFirstText(
+                        html,
+                        pattern);
+
+                if (!string.IsNullOrWhiteSpace(description) &&
+                    description.Length >= 3)
+                {
+                    return description;
+                }
+            }
+
+            return "";
+        }
+
+        private async Task CacheCatalogThumbnailsAsync(
             List<CatalogMod> mods)
         {
             using SemaphoreSlim semaphore =
@@ -1112,13 +1480,11 @@ namespace BeamNGModManager
 
                         try
                         {
-                            await EnrichBeamNgModAsync(
+                            await EnsureCatalogThumbnailAsync(
                                 mod);
                         }
                         catch
                         {
-                            // Kafelek pozostaje dostępny nawet wtedy,
-                            // gdy pojedyncza strona moda nie odpowie.
                         }
                         finally
                         {
@@ -1129,91 +1495,99 @@ namespace BeamNGModManager
             await Task.WhenAll(tasks);
         }
 
-        private async Task EnrichBeamNgModAsync(
+        private async Task EnsureCatalogThumbnailAsync(
             CatalogMod mod)
         {
-            if (string.IsNullOrWhiteSpace(
-                mod.ResourceUrl))
+            string imageUrl =
+                mod.ThumbnailUrl;
+
+            if (string.IsNullOrWhiteSpace(imageUrl))
+            {
+                try
+                {
+                    string html =
+                        await httpClient.GetStringAsync(
+                            mod.ResourceUrl);
+
+                    Uri resourceUri =
+                        new Uri(mod.ResourceUrl);
+
+                    imageUrl =
+                        ExtractThumbnailUrl(
+                            html,
+                            resourceUri);
+
+                    if (string.IsNullOrWhiteSpace(imageUrl))
+                    {
+                        imageUrl =
+                            ExtractGalleryImageUrls(
+                                html,
+                                resourceUri)
+                                .FirstOrDefault() ??
+                            "";
+                    }
+                }
+                catch
+                {
+                    return;
+                }
+            }
+
+            if (string.IsNullOrWhiteSpace(imageUrl))
             {
                 return;
             }
 
+            string cached =
+                await CacheRemoteImageAsync(
+                    imageUrl,
+                    mod.ResourceUrl,
+                    "thumbs");
+
+            if (!string.IsNullOrWhiteSpace(cached))
+            {
+                mod.ThumbnailUrl =
+                    cached;
+            }
+        }
+
+        private async Task LoadBeamNgModDetailsAsync(
+            CatalogMod mod)
+        {
             string html =
                 await httpClient.GetStringAsync(
                     mod.ResourceUrl);
 
-            Uri pageUri =
+            Uri resourceUri =
                 new Uri(mod.ResourceUrl);
-
-            string image =
-                ExtractMetaContent(
-                    html,
-                    "og:image");
-
-            if (string.IsNullOrWhiteSpace(image))
-            {
-                image =
-                    ExtractMetaContent(
-                        html,
-                        "twitter:image");
-            }
-
-            if (string.IsNullOrWhiteSpace(image))
-            {
-                image =
-                    ExtractThumbnailUrl(
-                        html,
-                        pageUri);
-            }
-
-            if (!string.IsNullOrWhiteSpace(image))
-            {
-                string absoluteImageUrl =
-                    MakeAbsoluteUrl(
-                        image,
-                        pageUri);
-
-                string cachedImage =
-                    await CacheThumbnailAsync(
-                        absoluteImageUrl,
-                        mod.ResourceUrl);
-
-                mod.ThumbnailUrl =
-                    string.IsNullOrWhiteSpace(cachedImage)
-                        ? absoluteImageUrl
-                        : cachedImage;
-            }
 
             string description =
                 ExtractResourceDescription(
                     html);
 
-            if (!string.IsNullOrWhiteSpace(
-                description))
+            if (!string.IsNullOrWhiteSpace(description))
             {
                 mod.Description =
                     description;
             }
 
             string author =
-                ExtractFirstText(
-                    html,
-                    "class=[\\\"'][^\\\"']*(?:username|username--style)[^\\\"']*[\\\"'][^>]*>(?<text>.*?)</a>");
+                ExtractBeamNgAuthor(
+                    html);
 
-            if (!string.IsNullOrWhiteSpace(
-                author))
+            if (!string.IsNullOrWhiteSpace(author) &&
+                author != "—")
             {
                 mod.Author =
                     author;
             }
 
             string category =
-                ExtractFirstText(
-                    html,
-                    "href=[\\\"'][^\\\"']*/resources/categories/[^\\\"']+[\\\"'][^>]*>(?<text>.*?)</a>");
+                ExtractBeamNgCategory(
+                    html);
 
-            if (!string.IsNullOrWhiteSpace(
-                category))
+            if (!string.IsNullOrWhiteSpace(category) &&
+                category != "Repo")
             {
                 mod.Category =
                     category;
@@ -1223,12 +1597,81 @@ namespace BeamNGModManager
                 ExtractResourceVersion(
                     html);
 
-            if (!string.IsNullOrWhiteSpace(
-                version))
+            if (!string.IsNullOrWhiteSpace(version))
             {
                 mod.Version =
                     version;
             }
+
+            string plain =
+                StripHtml(html);
+
+            mod.FileSize =
+                ExtractRegexValue(
+                    plain,
+                    @"Download Now\\s+(?<value>[0-9][0-9.,]*\\s*(?:KB|MB|GB))");
+
+            mod.TotalDownloads =
+                ExtractRegexValue(
+                    plain,
+                    @"Total Downloads:\\s*(?<value>[0-9][0-9,.\\s]*)");
+
+            mod.Subscriptions =
+                ExtractRegexValue(
+                    plain,
+                    @"Subscriptions:\\s*(?<value>[0-9][0-9,.\\s]*)");
+
+            mod.FirstRelease =
+                ExtractBetweenLabels(
+                    plain,
+                    "First Release:",
+                    "Last Update:");
+
+            mod.LastUpdate =
+                ExtractBetweenLabels(
+                    plain,
+                    "Last Update:",
+                    "Category:");
+
+            mod.Rating =
+                ExtractBetweenLabels(
+                    plain,
+                    "All-Time Rating:",
+                    "Version ");
+
+            string detailThumbnail =
+                ExtractThumbnailUrl(
+                    html,
+                    resourceUri);
+
+            if (!string.IsNullOrWhiteSpace(
+                detailThumbnail))
+            {
+                string cachedThumbnail =
+                    await CacheRemoteImageAsync(
+                        detailThumbnail,
+                        mod.ResourceUrl,
+                        "thumbs");
+
+                if (!string.IsNullOrWhiteSpace(
+                    cachedThumbnail))
+                {
+                    mod.ThumbnailUrl =
+                        cachedThumbnail;
+                }
+            }
+
+            List<string> galleryUrls =
+                ExtractGalleryImageUrls(
+                    html,
+                    resourceUri);
+
+            mod.GalleryImages =
+                await CacheGalleryImagesAsync(
+                    galleryUrls,
+                    mod.ResourceUrl);
+
+            mod.DetailsLoaded = true;
         }
 
         private string ExtractMetaContent(
@@ -1270,37 +1713,122 @@ namespace BeamNGModManager
             return "";
         }
 
-        private async Task<string> CacheThumbnailAsync(
-            string imageUrl,
+        private string ExtractRegexValue(
+            string text,
+            string pattern)
+        {
+            Match match =
+                Regex.Match(
+                    text,
+                    pattern,
+                    RegexOptions.IgnoreCase);
+
+            if (!match.Success)
+            {
+                return "—";
+            }
+
+            string value =
+                match.Groups["value"]
+                    .Value
+                    .Trim();
+
+            return string.IsNullOrWhiteSpace(value)
+                ? "—"
+                : value;
+        }
+
+        private string ExtractBetweenLabels(
+            string text,
+            string startLabel,
+            string endLabel)
+        {
+            Match match =
+                Regex.Match(
+                    text,
+                    Regex.Escape(startLabel) +
+                    @"\\s*(?<value>.*?)\\s*" +
+                    Regex.Escape(endLabel),
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            if (!match.Success)
+            {
+                return "—";
+            }
+
+            string value =
+                Regex.Replace(
+                    match.Groups["value"].Value,
+                    @"\\s+",
+                    " ")
+                    .Trim();
+
+            return string.IsNullOrWhiteSpace(value)
+                ? "—"
+                : value;
+        }
+
+        private async Task<List<string>> CacheGalleryImagesAsync(
+            List<string> imageUrls,
             string resourceUrl)
+        {
+            List<string> selected =
+                imageUrls
+                    .Distinct(
+                        StringComparer.OrdinalIgnoreCase)
+                    .Take(12)
+                    .ToList();
+
+            using SemaphoreSlim semaphore =
+                new SemaphoreSlim(4);
+
+            Task<string>[] tasks =
+                selected
+                    .Select(
+                        async imageUrl =>
+                        {
+                            await semaphore.WaitAsync();
+
+                            try
+                            {
+                                return await CacheRemoteImageAsync(
+                                    imageUrl,
+                                    resourceUrl,
+                                    "gallery");
+                            }
+                            finally
+                            {
+                                semaphore.Release();
+                            }
+                        })
+                    .ToArray();
+
+            string[] cached =
+                await Task.WhenAll(tasks);
+
+            return cached
+                .Where(value =>
+                    !string.IsNullOrWhiteSpace(value))
+                .ToList();
+        }
+
+        private async Task<string> CacheRemoteImageAsync(
+            string imageUrl,
+            string referrerUrl,
+            string cacheFolder)
         {
             try
             {
                 Uri imageUri =
                     new Uri(imageUrl);
 
-                Match resourceIdMatch =
-                    Regex.Match(
-                        resourceUrl,
-                        @"\.([0-9]+)/?$");
-
-                string resourceId =
-                    resourceIdMatch.Success
-                        ? resourceIdMatch.Groups[1].Value
-                        : Guid.NewGuid().ToString("N");
-
-                string extension =
-                    Path.GetExtension(
-                        imageUri.AbsolutePath)
-                        .ToLowerInvariant();
-
-                if (extension != ".jpg" &&
-                    extension != ".jpeg" &&
-                    extension != ".png" &&
-                    extension != ".webp")
-                {
-                    extension = ".jpg";
-                }
+                string hash =
+                    Convert.ToHexString(
+                        SHA256.HashData(
+                            Encoding.UTF8.GetBytes(
+                                imageUrl)))
+                    .ToLowerInvariant();
 
                 string cacheDirectory =
                     Path.Combine(
@@ -1308,39 +1836,103 @@ namespace BeamNGModManager
                             Environment.SpecialFolder.LocalApplicationData),
                         "BeamNGModManager",
                         "Cache",
-                        "Thumbnails");
+                        cacheFolder);
 
                 Directory.CreateDirectory(
                     cacheDirectory);
 
+                string[] existing =
+                    Directory.GetFiles(
+                        cacheDirectory,
+                        hash + ".*");
+
+                if (existing.Length > 0 &&
+                    new FileInfo(existing[0]).Length > 0)
+                {
+                    return new Uri(
+                        existing[0])
+                        .AbsoluteUri;
+                }
+
+                using HttpRequestMessage request =
+                    new HttpRequestMessage(
+                        HttpMethod.Get,
+                        imageUri);
+
+                if (Uri.TryCreate(
+                    referrerUrl,
+                    UriKind.Absolute,
+                    out Uri? referrer))
+                {
+                    request.Headers.Referrer =
+                        referrer;
+                }
+
+                using HttpResponseMessage response =
+                    await httpClient.SendAsync(
+                        request,
+                        HttpCompletionOption.ResponseHeadersRead);
+
+                response.EnsureSuccessStatusCode();
+
+                byte[] bytes =
+                    await response.Content
+                        .ReadAsByteArrayAsync();
+
+                if (bytes.Length == 0)
+                {
+                    return "";
+                }
+
+                string extension =
+                    Path.GetExtension(
+                        imageUri.AbsolutePath)
+                        .ToLowerInvariant();
+
+                string? mediaType =
+                    response.Content.Headers
+                        .ContentType?
+                        .MediaType;
+
+                if (mediaType ==
+                    "image/jpeg")
+                {
+                    extension = ".jpg";
+                }
+                else if (mediaType ==
+                    "image/png")
+                {
+                    extension = ".png";
+                }
+                else if (mediaType ==
+                    "image/gif")
+                {
+                    extension = ".gif";
+                }
+                else if (mediaType ==
+                    "image/webp")
+                {
+                    extension = ".webp";
+                }
+
+                if (extension != ".jpg" &&
+                    extension != ".jpeg" &&
+                    extension != ".png" &&
+                    extension != ".gif" &&
+                    extension != ".webp")
+                {
+                    extension = ".jpg";
+                }
+
                 string cacheFile =
                     Path.Combine(
                         cacheDirectory,
-                        resourceId +
+                        hash +
                         extension);
 
-                if (!File.Exists(cacheFile) ||
-                    new FileInfo(cacheFile).Length == 0)
-                {
-                    using HttpResponseMessage response =
-                        await httpClient.GetAsync(
-                            imageUri);
-
-                    response.EnsureSuccessStatusCode();
-
-                    byte[] bytes =
-                        await response.Content
-                            .ReadAsByteArrayAsync();
-
-                    if (bytes.Length == 0)
-                    {
-                        return "";
-                    }
-
-                    await File.WriteAllBytesAsync(
-                        cacheFile,
-                        bytes);
-                }
+                await File.WriteAllBytesAsync(
+                    cacheFile,
+                    bytes);
 
                 return new Uri(
                     cacheFile)
@@ -1373,23 +1965,34 @@ namespace BeamNGModManager
         private string ExtractResourceDescription(
             string html)
         {
-            Match body =
-                Regex.Match(
-                    html,
-                    "<div[^>]*class=[\\\"'][^\\\"']*bbWrapper[^\\\"']*[\\\"'][^>]*>(?<text>.*?)</div>",
-                    RegexOptions.IgnoreCase |
-                    RegexOptions.Singleline);
-
-            if (body.Success)
+            string[] bodyPatterns =
             {
+                "<div[^>]*class=[\\\"'][^\\\"']*bbWrapper[^\\\"']*[\\\"'][^>]*>(?<text>.*?)(?=<div[^>]*class=[\\\"'][^\\\"']*(?:resourceUpdate|resourceReview|message-attribution)[^\\\"']*[\\\"']|<h3[^>]*>Recent Reviews|$)",
+                "<blockquote[^>]*class=[\\\"'][^\\\"']*(?:messageText|ugc)[^\\\"']*[\\\"'][^>]*>(?<text>.*?)</blockquote>"
+            };
+
+            foreach (string pattern in bodyPatterns)
+            {
+                Match body =
+                    Regex.Match(
+                        html,
+                        pattern,
+                        RegexOptions.IgnoreCase |
+                        RegexOptions.Singleline);
+
+                if (!body.Success)
+                {
+                    continue;
+                }
+
                 string text =
                     StripHtml(
                         body.Groups["text"].Value);
 
-                if (text.Length >= 40)
+                if (text.Length >= 20)
                 {
-                    return text.Length > 3000
-                        ? text.Substring(0, 2997) + "..."
+                    return text.Length > 6000
+                        ? text.Substring(0, 5997) + "..."
                         : text;
                 }
             }
@@ -1397,164 +2000,92 @@ namespace BeamNGModManager
             string description =
                 ExtractMetaContent(
                     html,
-                    "og:description");
-
-            if (string.IsNullOrWhiteSpace(
-                description))
-            {
-                description =
-                    ExtractMetaContent(
-                        html,
-                        "description");
-            }
+                    "description");
 
             description =
                 StripHtml(description);
 
-            return description.Length > 3000
-                ? description.Substring(0, 2997) + "..."
+            return string.IsNullOrWhiteSpace(description)
+                ? "Brak opisu."
                 : description;
         }
 
         private string ExtractResourceVersion(
             string html)
         {
-            Match structured =
-                Regex.Match(
-                    html,
-                    "Version\\s*</dt>\\s*<dd[^>]*>(?<value>.*?)</dd>",
-                    RegexOptions.IgnoreCase |
-                    RegexOptions.Singleline);
-
-            if (structured.Success)
-            {
-                string value =
-                    StripHtml(
-                        structured.Groups["value"].Value);
-
-                if (!string.IsNullOrWhiteSpace(
-                    value))
-                {
-                    return value;
-                }
-            }
-
             string plain =
                 StripHtml(html);
 
-            Match fallback =
+            Match match =
                 Regex.Match(
                     plain,
-                    "\\bVersion\\s+(?<value>[0-9][0-9A-Za-z._+\\-]*)",
+                    @"\\bVersion[:\\s]+(?<value>[0-9][0-9A-Za-z._+\\-]*)",
                     RegexOptions.IgnoreCase);
 
-            return fallback.Success
-                ? fallback.Groups["value"].Value.Trim()
+            return match.Success
+                ? match.Groups["value"].Value.Trim()
                 : "—";
         }
 
-        private async Task<List<CatalogMod>> LoadBeamNgCatalogAsync()
+        private List<string> ExtractGalleryImageUrls(
+            string html,
+            Uri baseUri)
         {
-            const string pageUrl =
-                "https://www.beamng.com/resources/?order=resource_date";
+            List<string> urls =
+                new List<string>();
 
-            string html =
-                await httpClient.GetStringAsync(
-                    pageUrl);
-
-            Regex regex =
+            Regex imageRegex =
                 new Regex(
-                    "href=[\\\"'](?<url>(?:https://www\\.beamng\\.com)?/?resources/(?<slug>[^\\\"'#?]+\\.[0-9]+)/?)[\\\"'][^>]*>(?<title>.*?)</a>",
-                    RegexOptions.IgnoreCase |
-                    RegexOptions.Singleline);
+                    "(?:href|src|data-src|data-url)=[\\\"'](?<url>[^\\\"']+)[\\\"']",
+                    RegexOptions.IgnoreCase);
 
-            List<CatalogMod> result =
-                new List<CatalogMod>();
-
-            HashSet<string> seen =
-                new HashSet<string>(
-                    StringComparer.OrdinalIgnoreCase);
-
-            foreach (Match match in regex.Matches(html))
+            foreach (Match match in imageRegex.Matches(html))
             {
-                string relativeUrl =
+                string value =
                     WebUtility.HtmlDecode(
                         match.Groups["url"].Value);
 
-                string title =
-                    StripHtml(
-                        match.Groups["title"].Value);
+                string lower =
+                    value.ToLowerInvariant();
 
-                if (string.IsNullOrWhiteSpace(title) ||
-                    title.Length < 2)
+                bool likelyContentImage =
+                    lower.Contains("/attachments/") ||
+                    lower.Contains("/data/attachments/") ||
+                    lower.Contains("proxy.php?image=");
+
+                if (!likelyContentImage)
                 {
                     continue;
                 }
 
-                string absoluteUrl =
-                    Uri.TryCreate(
-                        relativeUrl,
-                        UriKind.Absolute,
-                        out Uri? absoluteResourceUri)
-                        ? absoluteResourceUri.ToString()
-                        : new Uri(
-                            new Uri("https://www.beamng.com/"),
-                            relativeUrl)
-                            .ToString();
-
-                if (!seen.Add(absoluteUrl))
+                if (lower.Contains("/avatars/") ||
+                    lower.Contains("/styles/") ||
+                    lower.Contains("smilie") ||
+                    lower.Contains("logo"))
                 {
                     continue;
                 }
 
-                string nearby =
-                    GetNearbyHtml(
-                        html,
-                        match.Index,
-                        1800);
+                try
+                {
+                    string absolute =
+                        MakeAbsoluteUrl(
+                            value,
+                            baseUri);
 
-                string author =
-                    ExtractFirstText(
-                        nearby,
-                        "class=[\\\"'][^\\\"']*(?:username|username--style)[^\\\"']*[\\\"'][^>]*>(?<text>.*?)</a>");
-
-                string category =
-                    ExtractFirstText(
-                        nearby,
-                        "href=[\\\"'][^\\\"']*/resources/categories/[^\\\"']+[\\\"'][^>]*>(?<text>.*?)</a>");
-
-                result.Add(
-                    new CatalogMod
+                    if (!urls.Contains(
+                        absolute,
+                        StringComparer.OrdinalIgnoreCase))
                     {
-                        Title = title,
-                        Source = "Repo BeamNG",
-                        Author =
-                            string.IsNullOrWhiteSpace(author)
-                                ? "—"
-                                : author,
-                        Category =
-                            string.IsNullOrWhiteSpace(category)
-                                ? "Repo"
-                                : category,
-                        Description =
-                            ExtractNearbyDescription(
-                                html,
-                                match.Index +
-                                match.Length),
-                        ThumbnailUrl =
-                            ExtractThumbnailUrl(
-                                nearby,
-                                new Uri(pageUrl)),
-                        ResourceUrl = absoluteUrl
-                    });
-
-                if (result.Count >= 24)
+                        urls.Add(absolute);
+                    }
+                }
+                catch
                 {
-                    break;
                 }
             }
 
-            return result;
+            return urls;
         }
 
         private async Task<List<CatalogMod>> LoadModLandCatalogAsync()
@@ -1723,46 +2254,48 @@ namespace BeamNGModManager
         {
             string[] patterns =
             {
-                "(?:data-src|data-url|src)=[\\\"'](?<url>[^\\\"']*(?:resource|attachment|proxy)[^\\\"']*\\.(?:jpg|jpeg|png|webp)(?:\\?[^\\\"']*)?)[\\\"']",
-                "(?:data-src|data-url|src)=[\\\"'](?<url>[^\\\"']+\\.(?:jpg|jpeg|png|webp)(?:\\?[^\\\"']*)?)[\\\"']"
+                "(?:href|src|data-src|data-url)=[\\\"'](?<url>[^\\\"']*/data/resource_icons/[^\\\"']+)[\\\"']",
+                "(?:href|src|data-src|data-url)=[\\\"'](?<url>[^\\\"']*resource_icons/[^\\\"']+)[\\\"']",
+                "(?:href|src|data-src|data-url)=[\\\"'](?<url>[^\\\"']*/attachments/[^\\\"']+)[\\\"']",
+                "(?:href|src|data-src|data-url)=[\\\"'](?<url>[^\\\"']+\\.(?:jpg|jpeg|png|webp)(?:\\?[^\\\"']*)?)[\\\"']"
             };
 
             foreach (string pattern in patterns)
             {
-                Match match =
-                    Regex.Match(
-                        html,
-                        pattern,
-                        RegexOptions.IgnoreCase);
-
-                if (!match.Success)
+                foreach (Match match in Regex.Matches(
+                    html,
+                    pattern,
+                    RegexOptions.IgnoreCase))
                 {
-                    continue;
+                    string value =
+                        WebUtility.HtmlDecode(
+                            match.Groups["url"].Value);
+
+                    string lower =
+                        value.ToLowerInvariant();
+
+                    if (value.StartsWith(
+                        "data:",
+                        StringComparison.OrdinalIgnoreCase) ||
+                        lower.Contains("/avatars/") ||
+                        lower.Contains("/styles/") ||
+                        lower.Contains("logo") ||
+                        lower.Contains("favicon") ||
+                        lower.Contains("smilie"))
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        return MakeAbsoluteUrl(
+                            value,
+                            baseUri);
+                    }
+                    catch
+                    {
+                    }
                 }
-
-                string value =
-                    WebUtility.HtmlDecode(
-                        match.Groups["url"].Value);
-
-                if (value.StartsWith(
-                    "data:",
-                    StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (Uri.TryCreate(
-                    value,
-                    UriKind.Absolute,
-                    out Uri? absoluteUri))
-                {
-                    return absoluteUri.ToString();
-                }
-
-                return new Uri(
-                    baseUri,
-                    value)
-                    .ToString();
             }
 
             return "";
@@ -2961,12 +3494,21 @@ namespace BeamNGModManager
     {
         public string Title { get; set; } = "";
         public string Source { get; set; } = "";
-        public string Author { get; set; } = "";
-        public string Category { get; set; } = "";
+        public string Author { get; set; } = "—";
+        public string Category { get; set; } = "Repo";
         public string Description { get; set; } = "";
         public string ThumbnailUrl { get; set; } = "";
         public string Version { get; set; } = "—";
+        public string FileSize { get; set; } = "—";
+        public string TotalDownloads { get; set; } = "—";
+        public string Subscriptions { get; set; } = "—";
+        public string FirstRelease { get; set; } = "—";
+        public string LastUpdate { get; set; } = "—";
+        public string Rating { get; set; } = "—";
         public string ResourceUrl { get; set; } = "";
+        public List<string> GalleryImages { get; set; } =
+            new List<string>();
+        public bool DetailsLoaded { get; set; }
     }
 
 }
