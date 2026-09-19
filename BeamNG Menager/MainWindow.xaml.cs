@@ -5,7 +5,10 @@ using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows;
 
 namespace BeamNGModManager
@@ -14,10 +17,26 @@ namespace BeamNGModManager
     {
         private string? modsFolder;
         private string gameVersion = "Nieznana";
+        private List<ModInfo> currentMods = new List<ModInfo>();
+
+        private static readonly HttpClient httpClient = CreateHttpClient();
 
         public MainWindow()
         {
             InitializeComponent();
+        }
+
+        private static HttpClient CreateHttpClient()
+        {
+            HttpClient client = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(12)
+            };
+
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BeamNGModManager/0.1");
+
+            return client;
         }
 
         private void DetectButton_Click(object sender, RoutedEventArgs e)
@@ -94,7 +113,8 @@ namespace BeamNGModManager
                 }
             }
 
-            string executableVersion = DetectGameVersionFromExecutable();
+            string? executableVersion =
+                DetectGameVersionFromExecutable();
 
             if (!string.IsNullOrWhiteSpace(executableVersion))
             {
@@ -109,6 +129,7 @@ namespace BeamNGModManager
 
                 ScanModsButton.IsEnabled = false;
                 InstallModButton.IsEnabled = false;
+                CheckUpdatesButton.IsEnabled = false;
                 return;
             }
 
@@ -127,6 +148,7 @@ namespace BeamNGModManager
 
             ScanModsButton.IsEnabled = true;
             InstallModButton.IsEnabled = true;
+            CheckUpdatesButton.IsEnabled = true;
         }
 
         private string? DetectGameVersionFromExecutable()
@@ -270,6 +292,9 @@ namespace BeamNGModManager
                     RepositoryId =
                         metadata.RepositoryId,
 
+                    RepositoryTitle =
+                        metadata.Title,
+
                     ReleaseDate =
                         metadata.ReleaseDate,
 
@@ -296,16 +321,24 @@ namespace BeamNGModManager
                 });
             }
 
-            ModsGrid.ItemsSource =
+            currentMods =
                 mods
                     .OrderBy(x => x.Name)
                     .ToList();
+
+            RefreshGrid();
 
             StatusText.Text =
                 "Wersja BeamNG: " +
                 gameVersion +
                 " | Znaleziono modów: " +
-                mods.Count;
+                currentMods.Count;
+        }
+
+        private void RefreshGrid()
+        {
+            ModsGrid.ItemsSource = null;
+            ModsGrid.ItemsSource = currentMods;
         }
 
         private string BuildUpdateStatus(
@@ -316,10 +349,10 @@ namespace BeamNGModManager
             {
                 if (metadata.RepositoryId != "Nie podano")
                 {
-                    return "Gotowy do sprawdzenia";
+                    return "Nie sprawdzono";
                 }
 
-                return "Brak ID repo";
+                return "Brak danych repo";
             }
 
             if (source == "Automation")
@@ -328,6 +361,313 @@ namespace BeamNGModManager
             }
 
             return "Brak danych źródła";
+        }
+
+        private async void CheckUpdatesButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(modsFolder))
+            {
+                MessageBox.Show(
+                    "Najpierw wykryj BeamNG.",
+                    "BeamNG Mod Manager");
+
+                return;
+            }
+
+            if (currentMods.Count == 0)
+            {
+                ScanMods();
+            }
+
+            List<ModInfo> repoMods =
+                currentMods
+                    .Where(mod =>
+                        mod.Source == "Repo BeamNG")
+                    .ToList();
+
+            if (repoMods.Count == 0)
+            {
+                StatusText.Text =
+                    "Nie znaleziono modów z Repo BeamNG do sprawdzenia.";
+
+                return;
+            }
+
+            CheckUpdatesButton.IsEnabled = false;
+            ScanModsButton.IsEnabled = false;
+            InstallModButton.IsEnabled = false;
+
+            int checkedCount = 0;
+            int updatesFound = 0;
+
+            try
+            {
+                foreach (ModInfo mod in repoMods)
+                {
+                    StatusText.Text =
+                        "Sprawdzanie aktualizacji: " +
+                        (checkedCount + 1) +
+                        "/" +
+                        repoMods.Count +
+                        " — " +
+                        mod.Name;
+
+                    string result =
+                        await CheckBeamNgUpdateAsync(mod);
+
+                    mod.UpdateStatus = result;
+
+                    if (result.StartsWith(
+                        "Aktualizacja:",
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        updatesFound++;
+                    }
+
+                    checkedCount++;
+                    RefreshGrid();
+                }
+
+                StatusText.Text =
+                    "Sprawdzono aktualizacje Repo BeamNG: " +
+                    checkedCount +
+                    ". Dostępne aktualizacje: " +
+                    updatesFound +
+                    ".";
+            }
+            finally
+            {
+                CheckUpdatesButton.IsEnabled = true;
+                ScanModsButton.IsEnabled = true;
+                InstallModButton.IsEnabled = true;
+            }
+        }
+
+        private async Task<string> CheckBeamNgUpdateAsync(
+            ModInfo mod)
+        {
+            if (string.IsNullOrWhiteSpace(mod.RepositoryId) ||
+                mod.RepositoryId == "Nie podano")
+            {
+                return "Brak danych repo";
+            }
+
+            string title =
+                string.IsNullOrWhiteSpace(mod.RepositoryTitle) ||
+                mod.RepositoryTitle == "Nie podano"
+                    ? mod.Name
+                    : mod.RepositoryTitle;
+
+            string url =
+                BuildBeamNgResourceUrl(
+                    title,
+                    mod.RepositoryId);
+
+            try
+            {
+                using HttpResponseMessage response =
+                    await httpClient.GetAsync(url);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    return "Błąd HTTP " +
+                        (int)response.StatusCode;
+                }
+
+                string html =
+                    await response.Content.ReadAsStringAsync();
+
+                string? remoteVersion =
+                    ExtractRemoteVersion(html);
+
+                if (string.IsNullOrWhiteSpace(remoteVersion))
+                {
+                    return "Nie odczytano wersji";
+                }
+
+                if (string.IsNullOrWhiteSpace(mod.ModVersion) ||
+                    mod.ModVersion == "Nie podano" ||
+                    mod.ModVersion == "Błąd")
+                {
+                    return "Online: " + remoteVersion;
+                }
+
+                int comparison =
+                    CompareVersionStrings(
+                        mod.ModVersion,
+                        remoteVersion);
+
+                if (comparison < 0)
+                {
+                    return "Aktualizacja: " +
+                        remoteVersion;
+                }
+
+                if (comparison == 0)
+                {
+                    return "Aktualny";
+                }
+
+                return "Lokalna nowsza";
+            }
+            catch (TaskCanceledException)
+            {
+                return "Przekroczono czas";
+            }
+            catch
+            {
+                return "Błąd połączenia";
+            }
+        }
+
+        private string BuildBeamNgResourceUrl(
+            string title,
+            string repositoryId)
+        {
+            string slug =
+                title
+                    .ToLowerInvariant()
+                    .Normalize();
+
+            slug =
+                Regex.Replace(
+                    slug,
+                    @"[^a-z0-9]+",
+                    "-")
+                    .Trim('-');
+
+            if (string.IsNullOrWhiteSpace(slug))
+            {
+                slug = "resource";
+            }
+
+            return
+                "https://www.beamng.com/resources/" +
+                slug +
+                "." +
+                repositoryId +
+                "/";
+        }
+
+        private string? ExtractRemoteVersion(
+            string html)
+        {
+            string cleaned =
+                Regex.Replace(
+                    html,
+                    @"<script\b[^<]*(?:(?!</script>)<[^<]*)*</script>",
+                    " ",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            cleaned =
+                Regex.Replace(
+                    cleaned,
+                    @"<style\b[^<]*(?:(?!</style>)<[^<]*)*</style>",
+                    " ",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            cleaned =
+                Regex.Replace(
+                    cleaned,
+                    @"<[^>]+>",
+                    " ");
+
+            cleaned =
+                WebUtility.HtmlDecode(cleaned);
+
+            cleaned =
+                Regex.Replace(
+                    cleaned,
+                    @"\s+",
+                    " ");
+
+            Match match =
+                Regex.Match(
+                    cleaned,
+                    @"\bVersion\s+([0-9][0-9A-Za-z._+\-]*)",
+                    RegexOptions.IgnoreCase);
+
+            if (match.Success &&
+                match.Groups.Count > 1)
+            {
+                return match.Groups[1]
+                    .Value
+                    .Trim();
+            }
+
+            return null;
+        }
+
+        private int CompareVersionStrings(
+            string localVersion,
+            string remoteVersion)
+        {
+            int[] localNumbers =
+                Regex.Matches(
+                    localVersion,
+                    @"\d+")
+                    .Select(match =>
+                        int.TryParse(
+                            match.Value,
+                            out int value)
+                            ? value
+                            : 0)
+                    .ToArray();
+
+            int[] remoteNumbers =
+                Regex.Matches(
+                    remoteVersion,
+                    @"\d+")
+                    .Select(match =>
+                        int.TryParse(
+                            match.Value,
+                            out int value)
+                            ? value
+                            : 0)
+                    .ToArray();
+
+            if (localNumbers.Length == 0 ||
+                remoteNumbers.Length == 0)
+            {
+                return string.Compare(
+                    localVersion,
+                    remoteVersion,
+                    StringComparison.OrdinalIgnoreCase);
+            }
+
+            int max =
+                Math.Max(
+                    localNumbers.Length,
+                    remoteNumbers.Length);
+
+            for (int i = 0; i < max; i++)
+            {
+                int local =
+                    i < localNumbers.Length
+                        ? localNumbers[i]
+                        : 0;
+
+                int remote =
+                    i < remoteNumbers.Length
+                        ? remoteNumbers[i]
+                        : 0;
+
+                if (local < remote)
+                {
+                    return -1;
+                }
+
+                if (local > remote)
+                {
+                    return 1;
+                }
+            }
+
+            return 0;
         }
 
         private void InstallModButton_Click(
@@ -653,6 +993,18 @@ namespace BeamNGModManager
                                 });
                     }
 
+                    if (metadata.Title == "Nie podano")
+                    {
+                        metadata.Title =
+                            ExtractFirstValue(
+                                text,
+                                new[]
+                                {
+                                    "title",
+                                    "name"
+                                });
+                    }
+
                     if (metadata.ReleaseDate == "Nie podano")
                     {
                         metadata.ReleaseDate =
@@ -665,13 +1017,14 @@ namespace BeamNGModManager
                                     "updated",
                                     "updateDate",
                                     "releaseDate",
+                                    "release_date",
                                     "date"
                                 });
                     }
 
                     if (metadata.Version != "Nie podano" &&
                         metadata.RepositoryId != "Nie podano" &&
-                        metadata.ReleaseDate != "Nie podano")
+                        metadata.Title != "Nie podano")
                     {
                         break;
                     }
@@ -916,6 +1269,7 @@ namespace BeamNGModManager
     {
         public string Version { get; set; } = "Nie podano";
         public string RepositoryId { get; set; } = "Nie podano";
+        public string Title { get; set; } = "Nie podano";
         public string ReleaseDate { get; set; } = "Nie podano";
     }
 
@@ -932,6 +1286,7 @@ namespace BeamNGModManager
         public string Type { get; set; } = "";
         public string ModVersion { get; set; } = "";
         public string RepositoryId { get; set; } = "";
+        public string RepositoryTitle { get; set; } = "";
         public string ReleaseDate { get; set; } = "";
         public string UpdateStatus { get; set; } = "";
         public string Size { get; set; } = "";
