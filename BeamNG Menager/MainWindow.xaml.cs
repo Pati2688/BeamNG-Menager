@@ -18,8 +18,10 @@ namespace BeamNGModManager
         private string? modsFolder;
         private string gameVersion = "Nieznana";
         private List<ModInfo> currentMods = new List<ModInfo>();
+        private List<CatalogMod> catalogMods = new List<CatalogMod>();
 
         private static readonly HttpClient httpClient = CreateHttpClient();
+        private static readonly HttpClient downloadClient = CreateDownloadHttpClient();
 
         public MainWindow()
         {
@@ -40,6 +42,19 @@ namespace BeamNGModManager
 
             client.DefaultRequestHeaders.UserAgent.ParseAdd(
                 "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BeamNGModManager/0.1");
+
+            return client;
+        }
+
+        private static HttpClient CreateDownloadHttpClient()
+        {
+            HttpClient client = new HttpClient
+            {
+                Timeout = TimeSpan.FromMinutes(30)
+            };
+
+            client.DefaultRequestHeaders.UserAgent.ParseAdd(
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BeamNGModManager/0.3");
 
             return client;
         }
@@ -932,35 +947,882 @@ namespace BeamNGModManager
             return 0;
         }
 
-        private void DownloadModsButton_Click(
+        private void LibraryButton_Click(
             object sender,
             RoutedEventArgs e)
         {
+            DownloadView.Visibility =
+                Visibility.Collapsed;
+
+            LibraryView.Visibility =
+                Visibility.Visible;
+
+            DetailsPanel.Visibility =
+                Visibility.Visible;
+
+            LibraryButton.Background =
+                (System.Windows.Media.Brush)
+                FindResource("AccentSoftBrush");
+
+            DownloadModsButton.Background =
+                System.Windows.Media.Brushes.Transparent;
+        }
+
+        private async void DownloadModsButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            LibraryView.Visibility =
+                Visibility.Collapsed;
+
+            DetailsPanel.Visibility =
+                Visibility.Collapsed;
+
+            DownloadView.Visibility =
+                Visibility.Visible;
+
+            LibraryButton.Background =
+                System.Windows.Media.Brushes.Transparent;
+
+            DownloadModsButton.Background =
+                (System.Windows.Media.Brush)
+                FindResource("AccentSoftBrush");
+
+            if (catalogMods.Count == 0)
+            {
+                await LoadCatalogAsync();
+            }
+        }
+
+        private async void RefreshCatalogButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            await LoadCatalogAsync();
+        }
+
+        private async Task LoadCatalogAsync()
+        {
+            RefreshCatalogButton.IsEnabled = false;
+            DownloadModsButton.IsEnabled = false;
+
+            CatalogStatusText.Text =
+                "Pobieranie list modów z Repo BeamNG, ModLand i ModDB...";
+
+            try
+            {
+                Task<List<CatalogMod>> beamNgTask =
+                    LoadBeamNgCatalogAsync();
+
+                Task<List<CatalogMod>> modLandTask =
+                    LoadModLandCatalogAsync();
+
+                Task<List<CatalogMod>> modDbTask =
+                    LoadModDbCatalogAsync();
+
+                List<CatalogMod>[] results =
+                    await Task.WhenAll(
+                        beamNgTask,
+                        modLandTask,
+                        modDbTask);
+
+                catalogMods =
+                    results
+                        .SelectMany(list => list)
+                        .GroupBy(
+                            mod => mod.ResourceUrl,
+                            StringComparer.OrdinalIgnoreCase)
+                        .Select(group => group.First())
+                        .OrderBy(mod =>
+                            mod.Source == "Repo BeamNG"
+                                ? 0
+                                : mod.Source == "ModLand"
+                                    ? 1
+                                    : 2)
+                        .ThenBy(mod => mod.Title)
+                        .ToList();
+
+                CatalogGrid.ItemsSource = null;
+                CatalogGrid.ItemsSource = catalogMods;
+
+                int repoCount =
+                    catalogMods.Count(mod =>
+                        mod.Source == "Repo BeamNG");
+
+                int modLandCount =
+                    catalogMods.Count(mod =>
+                        mod.Source == "ModLand");
+
+                int modDbCount =
+                    catalogMods.Count(mod =>
+                        mod.Source == "ModDB");
+
+                CatalogStatusText.Text =
+                    "Gotowe: " +
+                    catalogMods.Count +
+                    " modów | Repo BeamNG: " +
+                    repoCount +
+                    " | ModLand: " +
+                    modLandCount +
+                    " | ModDB: " +
+                    modDbCount;
+            }
+            catch (Exception ex)
+            {
+                CatalogStatusText.Text =
+                    "Nie udało się wczytać katalogu: " +
+                    ex.Message;
+            }
+            finally
+            {
+                RefreshCatalogButton.IsEnabled = true;
+                DownloadModsButton.IsEnabled = true;
+            }
+        }
+
+        private async Task<List<CatalogMod>> LoadBeamNgCatalogAsync()
+        {
+            const string pageUrl =
+                "https://www.beamng.com/resources/?order=resource_date";
+
+            string html =
+                await httpClient.GetStringAsync(
+                    pageUrl);
+
+            Regex regex =
+                new Regex(
+                    "href=[\\\"'](?<url>/resources/(?<slug>[^\\\"']+\\.[0-9]+)/?)[\\\"'][^>]*>(?<title>.*?)</a>",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            List<CatalogMod> result =
+                new List<CatalogMod>();
+
+            HashSet<string> seen =
+                new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            foreach (Match match in regex.Matches(html))
+            {
+                string relativeUrl =
+                    WebUtility.HtmlDecode(
+                        match.Groups["url"].Value);
+
+                string title =
+                    StripHtml(
+                        match.Groups["title"].Value);
+
+                if (string.IsNullOrWhiteSpace(title) ||
+                    title.Length < 2)
+                {
+                    continue;
+                }
+
+                string absoluteUrl =
+                    "https://www.beamng.com" +
+                    relativeUrl;
+
+                if (!seen.Add(absoluteUrl))
+                {
+                    continue;
+                }
+
+                result.Add(
+                    new CatalogMod
+                    {
+                        Title = title,
+                        Source = "Repo BeamNG",
+                        Author = "—",
+                        Category = "Repo",
+                        Description =
+                            ExtractNearbyDescription(
+                                html,
+                                match.Index +
+                                match.Length),
+                        ResourceUrl = absoluteUrl
+                    });
+
+                if (result.Count >= 35)
+                {
+                    break;
+                }
+            }
+
+            return result;
+        }
+
+        private async Task<List<CatalogMod>> LoadModLandCatalogAsync()
+        {
+            const string pageUrl =
+                "https://www.modland.net/beamng.drive-mods";
+
+            string html =
+                await httpClient.GetStringAsync(
+                    pageUrl);
+
+            Regex regex =
+                new Regex(
+                    "href=[\\\"'](?<url>/beamng\\.drive-mods/(?<category>[^/\\\"']+)/(?<slug>[^\\\"']+\\.html))[\\\"'][^>]*>(?<title>.*?)</a>",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            List<CatalogMod> result =
+                new List<CatalogMod>();
+
+            HashSet<string> seen =
+                new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            foreach (Match match in regex.Matches(html))
+            {
+                string title =
+                    StripHtml(
+                        match.Groups["title"].Value);
+
+                if (string.IsNullOrWhiteSpace(title) ||
+                    title.Length < 3 ||
+                    title.Equals(
+                        "View Mod",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string relativeUrl =
+                    WebUtility.HtmlDecode(
+                        match.Groups["url"].Value);
+
+                string absoluteUrl =
+                    "https://www.modland.net" +
+                    relativeUrl;
+
+                if (!seen.Add(absoluteUrl))
+                {
+                    continue;
+                }
+
+                string category =
+                    match.Groups["category"]
+                        .Value
+                        .Replace("-", " ");
+
+                result.Add(
+                    new CatalogMod
+                    {
+                        Title = title,
+                        Source = "ModLand",
+                        Author = "—",
+                        Category = category,
+                        Description =
+                            ExtractNearbyDescription(
+                                html,
+                                match.Index +
+                                match.Length),
+                        ResourceUrl = absoluteUrl
+                    });
+
+                if (result.Count >= 30)
+                {
+                    break;
+                }
+            }
+
+            return result;
+        }
+
+        private async Task<List<CatalogMod>> LoadModDbCatalogAsync()
+        {
+            const string pageUrl =
+                "https://www.moddb.com/games/beamngdrive/downloads";
+
+            string html =
+                await httpClient.GetStringAsync(
+                    pageUrl);
+
+            Regex regex =
+                new Regex(
+                    "href=[\\\"'](?<url>/downloads/(?<slug>[^\\\"'#?]+))[\\\"'][^>]*>(?<title>.*?)</a>",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            List<CatalogMod> result =
+                new List<CatalogMod>();
+
+            HashSet<string> seen =
+                new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            foreach (Match match in regex.Matches(html))
+            {
+                string relativeUrl =
+                    WebUtility.HtmlDecode(
+                        match.Groups["url"].Value);
+
+                if (relativeUrl.Contains(
+                    "/add",
+                    StringComparison.OrdinalIgnoreCase) ||
+                    relativeUrl.Contains(
+                    "/start/",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string title =
+                    StripHtml(
+                        match.Groups["title"].Value);
+
+                if (string.IsNullOrWhiteSpace(title) ||
+                    title.Length < 3)
+                {
+                    continue;
+                }
+
+                string absoluteUrl =
+                    "https://www.moddb.com" +
+                    relativeUrl;
+
+                if (!seen.Add(absoluteUrl))
+                {
+                    continue;
+                }
+
+                result.Add(
+                    new CatalogMod
+                    {
+                        Title = title,
+                        Source = "ModDB",
+                        Author = "—",
+                        Category = "Download",
+                        Description =
+                            ExtractNearbyDescription(
+                                html,
+                                match.Index +
+                                match.Length),
+                        ResourceUrl = absoluteUrl
+                    });
+
+                if (result.Count >= 20)
+                {
+                    break;
+                }
+            }
+
+            return result;
+        }
+
+        private string StripHtml(string value)
+        {
+            string text =
+                Regex.Replace(
+                    value,
+                    "<[^>]+>",
+                    " ");
+
+            text =
+                WebUtility.HtmlDecode(text);
+
+            return Regex.Replace(
+                    text,
+                    "\\s+",
+                    " ")
+                .Trim();
+        }
+
+        private string ExtractNearbyDescription(
+            string html,
+            int startIndex)
+        {
+            if (startIndex < 0 ||
+                startIndex >= html.Length)
+            {
+                return "";
+            }
+
+            int length =
+                Math.Min(
+                    900,
+                    html.Length - startIndex);
+
+            string fragment =
+                html.Substring(
+                    startIndex,
+                    length);
+
+            Match paragraph =
+                Regex.Match(
+                    fragment,
+                    "<p[^>]*>(?<text>.*?)</p>",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            if (!paragraph.Success)
+            {
+                return "";
+            }
+
+            string description =
+                StripHtml(
+                    paragraph.Groups["text"].Value);
+
+            if (description.Length > 180)
+            {
+                description =
+                    description.Substring(
+                        0,
+                        177) +
+                    "...";
+            }
+
+            return description;
+        }
+
+        private async void DownloadCatalogItem_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (sender is not System.Windows.Controls.Button button ||
+                button.DataContext is not CatalogMod mod)
+            {
+                return;
+            }
+
             if (string.IsNullOrWhiteSpace(modsFolder) ||
                 !Directory.Exists(modsFolder))
             {
-                MessageBox.Show(
-                    "Nie wykryto folderu modów BeamNG.",
-                    "BeamNG Mod Manager",
-                    MessageBoxButton.OK,
-                    MessageBoxImage.Warning);
+                CatalogStatusText.Text =
+                    "Nie wykryto folderu modów BeamNG.";
 
                 return;
             }
 
-            DownloadWindow window =
-                new DownloadWindow(modsFolder)
-                {
-                    Owner = this
-                };
+            button.IsEnabled = false;
 
-            bool? result =
-                window.ShowDialog();
-
-            if (result == true)
+            try
             {
+                CatalogStatusText.Text =
+                    "Przygotowanie pobierania: " +
+                    mod.Title +
+                    "...";
+
+                await DownloadAndInstallCatalogModAsync(
+                    mod);
+
+                CatalogStatusText.Text =
+                    "Zainstalowano: " +
+                    mod.Title;
+
                 ScanMods();
             }
+            catch (Exception ex)
+            {
+                CatalogStatusText.Text =
+                    "Błąd pobierania „" +
+                    mod.Title +
+                    "”: " +
+                    ex.Message;
+            }
+            finally
+            {
+                button.IsEnabled = true;
+            }
+        }
+
+        private async Task DownloadAndInstallCatalogModAsync(
+            CatalogMod mod)
+        {
+            Uri pageUri =
+                new Uri(mod.ResourceUrl);
+
+            using HttpResponseMessage response =
+                await GetDownloadResponseAsync(
+                    pageUri,
+                    mod.Source);
+
+            response.EnsureSuccessStatusCode();
+
+            string fileName =
+                GetDownloadedFileName(
+                    response,
+                    mod.Title);
+
+            string tempDirectory =
+                Path.Combine(
+                    Path.GetTempPath(),
+                    "BeamNGModManager");
+
+            Directory.CreateDirectory(
+                tempDirectory);
+
+            string tempFile =
+                Path.Combine(
+                    tempDirectory,
+                    Guid.NewGuid().ToString("N") +
+                    "_" +
+                    SanitizeFileName(fileName));
+
+            try
+            {
+                long? totalLength =
+                    response.Content.Headers.ContentLength;
+
+                using Stream input =
+                    await response.Content.ReadAsStreamAsync();
+
+                using FileStream output =
+                    new FileStream(
+                        tempFile,
+                        FileMode.Create,
+                        FileAccess.Write,
+                        FileShare.None,
+                        81920,
+                        useAsync: true);
+
+                byte[] buffer =
+                    new byte[81920];
+
+                long downloaded = 0;
+
+                while (true)
+                {
+                    int read =
+                        await input.ReadAsync(
+                            buffer,
+                            0,
+                            buffer.Length);
+
+                    if (read <= 0)
+                    {
+                        break;
+                    }
+
+                    await output.WriteAsync(
+                        buffer,
+                        0,
+                        read);
+
+                    downloaded += read;
+
+                    if (totalLength.HasValue &&
+                        totalLength.Value > 0)
+                    {
+                        double percent =
+                            downloaded *
+                            100.0 /
+                            totalLength.Value;
+
+                        CatalogStatusText.Text =
+                            "Pobieranie „" +
+                            mod.Title +
+                            "”: " +
+                            percent.ToString("0") +
+                            "%";
+                    }
+                    else
+                    {
+                        CatalogStatusText.Text =
+                            "Pobieranie „" +
+                            mod.Title +
+                            "”: " +
+                            FormatSize(downloaded);
+                    }
+                }
+
+                string zipStatus =
+                    CheckZip(tempFile);
+
+                if (zipStatus != "OK")
+                {
+                    throw new InvalidDataException(
+                        "Pobrany plik nie jest poprawnym archiwum ZIP.");
+                }
+
+                string modType =
+                    DetectModType(tempFile);
+
+                CompatibilityResult compatibility =
+                    CheckCompatibility(
+                        tempFile,
+                        zipStatus,
+                        modType);
+
+                if (compatibility.Status ==
+                    "Niezgodny")
+                {
+                    throw new InvalidDataException(
+                        compatibility.Reason);
+                }
+
+                if (compatibility.Status ==
+                    "Ryzyko problemów")
+                {
+                    MessageBoxResult answer =
+                        MessageBox.Show(
+                            "Program wykrył możliwy problem:\n\n" +
+                            compatibility.Reason +
+                            "\n\nCzy mimo to zainstalować mod?",
+                            "Ostrzeżenie",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Warning);
+
+                    if (answer !=
+                        MessageBoxResult.Yes)
+                    {
+                        throw new OperationCanceledException(
+                            "Instalacja anulowana przez użytkownika.");
+                    }
+                }
+
+                string destination =
+                    Path.Combine(
+                        modsFolder!,
+                        SanitizeFileName(fileName));
+
+                if (File.Exists(destination))
+                {
+                    MessageBoxResult answer =
+                        MessageBox.Show(
+                            "Mod o tej nazwie już istnieje.\n\n" +
+                            "Czy zastąpić istniejący plik?",
+                            "Mod już istnieje",
+                            MessageBoxButton.YesNo,
+                            MessageBoxImage.Question);
+
+                    if (answer !=
+                        MessageBoxResult.Yes)
+                    {
+                        throw new OperationCanceledException(
+                            "Instalacja anulowana przez użytkownika.");
+                    }
+                }
+
+                File.Copy(
+                    tempFile,
+                    destination,
+                    true);
+            }
+            finally
+            {
+                try
+                {
+                    if (File.Exists(tempFile))
+                    {
+                        File.Delete(tempFile);
+                    }
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        private async Task<HttpResponseMessage> GetDownloadResponseAsync(
+            Uri initialUri,
+            string source)
+        {
+            Uri currentUri =
+                initialUri;
+
+            for (int attempt = 0;
+                attempt < 4;
+                attempt++)
+            {
+                HttpResponseMessage response =
+                    await downloadClient.GetAsync(
+                        currentUri,
+                        HttpCompletionOption.ResponseHeadersRead);
+
+                response.EnsureSuccessStatusCode();
+
+                string? mediaType =
+                    response.Content.Headers.ContentType?.MediaType;
+
+                string? disposition =
+                    response.Content.Headers.ContentDisposition?.DispositionType;
+
+                bool looksLikeFile =
+                    !string.IsNullOrWhiteSpace(disposition) &&
+                    disposition.Equals(
+                        "attachment",
+                        StringComparison.OrdinalIgnoreCase);
+
+                looksLikeFile =
+                    looksLikeFile ||
+                    mediaType == "application/zip" ||
+                    mediaType == "application/x-zip-compressed" ||
+                    mediaType == "application/octet-stream";
+
+                if (looksLikeFile)
+                {
+                    return response;
+                }
+
+                if (mediaType == null ||
+                    !mediaType.Contains(
+                        "html",
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return response;
+                }
+
+                string html =
+                    await response.Content.ReadAsStringAsync();
+
+                Uri? nextUri =
+                    ExtractDownloadUriFromPage(
+                        html,
+                        response.RequestMessage?.RequestUri ??
+                        currentUri,
+                        source);
+
+                response.Dispose();
+
+                if (nextUri == null ||
+                    nextUri == currentUri)
+                {
+                    throw new InvalidOperationException(
+                        "Nie znaleziono bezpośredniego pliku do pobrania.");
+                }
+
+                currentUri =
+                    nextUri;
+            }
+
+            throw new InvalidOperationException(
+                "Strona używa zbyt wielu etapów pobierania.");
+        }
+
+        private Uri? ExtractDownloadUriFromPage(
+            string html,
+            Uri baseUri,
+            string source)
+        {
+            List<string> patterns =
+                new List<string>();
+
+            if (source == "Repo BeamNG")
+            {
+                patterns.Add(
+                    "href=[\\\"'](?<url>[^\\\"']*download\\?version=[^\\\"']+)[\\\"']");
+            }
+            else if (source == "ModDB")
+            {
+                patterns.Add(
+                    "href=[\\\"'](?<url>/downloads/start/[^\\\"']+)[\\\"']");
+
+                patterns.Add(
+                    "href=[\\\"'](?<url>/downloads/[^\\\"']+)[\\\"']");
+            }
+            else if (source == "ModLand")
+            {
+                patterns.Add(
+                    "href=[\\\"'](?<url>[^\\\"']+\\.zip(?:\\?[^\\\"']*)?)[\\\"']");
+
+                patterns.Add(
+                    "href=[\\\"'](?<url>[^\\\"']*(?:download|downloads)[^\\\"']*)[\\\"']");
+            }
+
+            patterns.Add(
+                "href=[\\\"'](?<url>[^\\\"']+\\.zip(?:\\?[^\\\"']*)?)[\\\"']");
+
+            foreach (string pattern in patterns)
+            {
+                Match match =
+                    Regex.Match(
+                        html,
+                        pattern,
+                        RegexOptions.IgnoreCase);
+
+                if (!match.Success)
+                {
+                    continue;
+                }
+
+                string href =
+                    WebUtility.HtmlDecode(
+                        match.Groups["url"].Value);
+
+                if (href.Contains(
+                    "/add",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (Uri.TryCreate(
+                    href,
+                    UriKind.Absolute,
+                    out Uri? absoluteUri))
+                {
+                    return absoluteUri;
+                }
+
+                return new Uri(
+                    baseUri,
+                    href);
+            }
+
+            return null;
+        }
+
+        private string GetDownloadedFileName(
+            HttpResponseMessage response,
+            string modTitle)
+        {
+            string? fileName =
+                response.Content.Headers
+                    .ContentDisposition?
+                    .FileNameStar;
+
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                fileName =
+                    response.Content.Headers
+                        .ContentDisposition?
+                        .FileName;
+            }
+
+            if (!string.IsNullOrWhiteSpace(fileName))
+            {
+                fileName =
+                    fileName
+                        .Trim()
+                        .Trim('"');
+
+                if (!fileName.EndsWith(
+                    ".zip",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    fileName += ".zip";
+                }
+
+                return fileName;
+            }
+
+            string safeTitle =
+                SanitizeFileName(modTitle);
+
+            if (string.IsNullOrWhiteSpace(safeTitle))
+            {
+                safeTitle = "downloaded_mod";
+            }
+
+            return safeTitle + ".zip";
+        }
+
+        private string SanitizeFileName(
+            string fileName)
+        {
+            foreach (char invalid
+                in Path.GetInvalidFileNameChars())
+            {
+                fileName =
+                    fileName.Replace(
+                        invalid,
+                        '_');
+            }
+
+            return fileName;
         }
 
         private void InstallModButton_Click(
@@ -1595,4 +2457,15 @@ namespace BeamNGModManager
         public string Compatibility { get; set; } = "";
         public string CompatibilityReason { get; set; } = "";
     }
+
+    public class CatalogMod
+    {
+        public string Title { get; set; } = "";
+        public string Source { get; set; } = "";
+        public string Author { get; set; } = "";
+        public string Category { get; set; } = "";
+        public string Description { get; set; } = "";
+        public string ResourceUrl { get; set; } = "";
+    }
+
 }
