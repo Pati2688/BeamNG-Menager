@@ -277,6 +277,12 @@
                             Style="{StaticResource SidebarButtonStyle}"
                             Background="{StaticResource AccentSoftBrush}"/>
 
+                    <Button x:Name="DownloadModsButton"
+                            Content="Pobieranie modów"
+                            Style="{StaticResource SidebarButtonStyle}"
+                            IsEnabled="False"
+                            Click="DownloadModsButton_Click"/>
+
                     <Button x:Name="ScanModsButton"
                             Content="Odśwież bibliotekę"
                             Style="{StaticResource SidebarButtonStyle}"
