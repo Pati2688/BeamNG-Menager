@@ -353,7 +353,6 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
@@ -395,53 +394,6 @@
             </Grid>
 
             <Border Grid.Row="1"
-                    Background="{StaticResource PanelBrush}"
-                    BorderBrush="{StaticResource BorderBrushSoft}"
-                    BorderThickness="1"
-                    CornerRadius="10"
-                    Padding="14,10"
-                    Margin="0,0,0,10">
-
-                <StackPanel Orientation="Horizontal"
-                            VerticalAlignment="Center">
-
-                    <TextBlock Text="Źródła:"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               Margin="0,0,14,0"/>
-
-                    <CheckBox x:Name="AllSourcesCheckBox"
-                              Content="Wszystkie"
-                              IsChecked="True"
-                              VerticalAlignment="Center"
-                              Margin="0,0,16,0"
-                              Click="AllSourcesCheckBox_Click"/>
-
-                    <CheckBox x:Name="RepoSourceCheckBox"
-                              Content="Repo BeamNG"
-                              IsChecked="True"
-                              VerticalAlignment="Center"
-                              Margin="0,0,16,0"
-                              Click="SourceFilterCheckBox_Click"/>
-
-                    <CheckBox x:Name="ModLandSourceCheckBox"
-                              Content="ModLand"
-                              IsChecked="True"
-                              VerticalAlignment="Center"
-                              Margin="0,0,16,0"
-                              Click="SourceFilterCheckBox_Click"/>
-
-                    <CheckBox x:Name="ModDbSourceCheckBox"
-                              Content="ModDB"
-                              IsChecked="True"
-                              VerticalAlignment="Center"
-                              Click="SourceFilterCheckBox_Click"/>
-
-                </StackPanel>
-
-            </Border>
-
-            <Border Grid.Row="2"
                     Background="{StaticResource PanelBrush}"
                     BorderBrush="{StaticResource BorderBrushSoft}"
                     BorderThickness="1"
