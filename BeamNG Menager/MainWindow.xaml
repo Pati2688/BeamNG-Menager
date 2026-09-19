@@ -263,7 +263,7 @@
                                Margin="16,0,0,8"/>
 
                     <Button x:Name="DetectButton"
-                            Content="Wykryj BeamNG"
+                            Content="Sprawdź BeamNG"
                             Style="{StaticResource SidebarButtonStyle}"
                             Click="DetectButton_Click"/>
 
@@ -367,45 +367,75 @@
                     CornerRadius="12"
                     Padding="1">
 
-                <DataGrid x:Name="ModsGrid">
+                <DataGrid x:Name="ModsGrid"
+                          FrozenColumnCount="1"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Auto"
+                          CanUserResizeColumns="True">
 
                     <DataGrid.Columns>
 
                         <DataGridTextColumn Header="Mod"
                                             Binding="{Binding Name}"
-                                            Width="*"
-                                            MinWidth="170"/>
+                                            Width="1.7*"
+                                            MinWidth="180"/>
 
                         <DataGridTextColumn Header="Źródło"
                                             Binding="{Binding Source}"
-                                            Width="135"/>
+                                            Width="1.0*"
+                                            MinWidth="115"/>
 
                         <DataGridTextColumn Header="Typ"
                                             Binding="{Binding Type}"
-                                            Width="105"/>
+                                            Width="0.8*"
+                                            MinWidth="90"/>
 
                         <DataGridTextColumn Header="Wersja"
                                             Binding="{Binding ModVersion}"
-                                            Width="90"/>
+                                            Width="0.7*"
+                                            MinWidth="80"/>
 
                         <DataGridTextColumn Header="Aktualizacje"
                                             Binding="{Binding UpdateStatus}"
-                                            Width="150"/>
+                                            Width="1.05*"
+                                            MinWidth="125"/>
+
+                        <DataGridTemplateColumn Header="Kolizje"
+                                                Width="1.05*"
+                                                MinWidth="130">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Border CornerRadius="6"
+                                            Padding="8,4"
+                                            HorizontalAlignment="Left"
+                                            Background="{Binding ConflictColor}">
+                                        <TextBlock Text="{Binding ConflictStatus}"
+                                                   Foreground="White"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="12"/>
+                                    </Border>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
 
                         <DataGridTextColumn Header="Rozmiar"
                                             Binding="{Binding Size}"
-                                            Width="85"/>
+                                            Width="0.65*"
+                                            MinWidth="75"/>
 
                         <DataGridTextColumn Header="Plik zmieniony"
                                             Binding="{Binding Modified}"
-                                            Width="135"/>
+                                            Width="1.0*"
+                                            MinWidth="125"/>
 
                         <DataGridTextColumn Header="Stan"
                                             Binding="{Binding Status}"
-                                            Width="85"/>
+                                            Width="0.65*"
+                                            MinWidth="80"/>
 
                         <DataGridTemplateColumn Header="Zgodność"
-                                                Width="175">
+                                                Width="1.25*"
+                                                MinWidth="155">
 
                             <DataGridTemplateColumn.CellTemplate>
                                 <DataTemplate>
@@ -602,6 +632,25 @@
                             Margin="0,0,0,12">
 
                         <StackPanel>
+
+                            <TextBlock Text="Kolizje"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       FontSize="11"/>
+
+                            <TextBlock Text="{Binding ConflictStatus, TargetNullValue=—}"
+                                       FontWeight="Bold"
+                                       FontSize="15"
+                                       Margin="0,4,0,5"/>
+
+                            <TextBlock Text="{Binding ConflictDetails, TargetNullValue=Brak danych o kolizjach}"
+                                       TextWrapping="Wrap"
+                                       Foreground="#C7CED8"
+                                       FontSize="12"
+                                       Margin="0,0,0,12"/>
+
+                            <Border Height="1"
+                                    Background="#303641"
+                                    Margin="0,0,0,12"/>
 
                             <TextBlock Text="Zgodność"
                                        Foreground="{StaticResource TextMutedBrush}"
