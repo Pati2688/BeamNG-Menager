@@ -617,7 +617,8 @@
                               BorderThickness="0"
                               Padding="9,6"
                               FontSize="13"
-                              SelectedIndex="0">
+                              SelectedIndex="0"
+                              SelectionChanged="CatalogSortComboBox_SelectionChanged">
 
                         <ComboBox.Resources>
                             <Style TargetType="ComboBoxItem">
