@@ -361,6 +361,7 @@
 
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="300"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
@@ -579,12 +580,33 @@
                                Margin="0,4,0,0"/>
                 </StackPanel>
 
+                <Border Grid.Column="1"
+                        Height="38"
+                        Background="#171A21"
+                        BorderBrush="{StaticResource BorderBrushSoft}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Center">
+
+                    <TextBox x:Name="CatalogSearchBox"
+                             Background="Transparent"
+                             Foreground="#F2F4F8"
+                             BorderThickness="0"
+                             Padding="10,7"
+                             FontSize="13"
+                             CaretBrush="White"
+                             ToolTip="Szukaj moda po nazwie"
+                             TextChanged="CatalogSearchBox_TextChanged"/>
+
+                </Border>
+
                 <Button x:Name="RefreshCatalogButton"
-                        Grid.Column="1"
+                        Grid.Column="2"
                         Content="Odśwież"
                         Style="{StaticResource PrimaryButtonStyle}"
                         Width="140"
-                        Margin="10,0,0,0"
+                        Margin="0"
                         Click="RefreshCatalogButton_Click"/>
 
             </Grid>
@@ -658,7 +680,9 @@
                                                                VerticalAlignment="Center"/>
 
                                                     <Image Source="{Binding ThumbnailUrl}"
-                                                           Stretch="UniformToFill"/>
+                                                           Stretch="Uniform"
+                                                           RenderOptions.BitmapScalingMode="HighQuality"
+                                                           SnapsToDevicePixels="True"/>
                                                 </Grid>
 
                                             </Border>
@@ -752,7 +776,9 @@
                                                    VerticalAlignment="Center"/>
 
                                         <Image Source="{Binding ThumbnailUrl}"
-                                               Stretch="UniformToFill"/>
+                                               Stretch="Uniform"
+                                               RenderOptions.BitmapScalingMode="HighQuality"
+                                               SnapsToDevicePixels="True"/>
                                     </Grid>
 
                                 </Border>
