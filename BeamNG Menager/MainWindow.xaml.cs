@@ -415,6 +415,8 @@ namespace BeamNGModManager
 
             RefreshGrid();
 
+            UpdateCatalogInstallationState();
+
             StatusText.Text =
                 "Biblioteka odświeżona. Wersja BeamNG: " +
                 gameVersion +
@@ -1082,6 +1084,139 @@ namespace BeamNGModManager
             ApplyCatalogSearch();
         }
 
+        private void UpdateCatalogInstallationState()
+        {
+            foreach (CatalogMod catalogMod in catalogMods)
+            {
+                bool installed =
+                    IsCatalogModInstalled(
+                        catalogMod);
+
+                catalogMod.IsInstalled =
+                    installed;
+
+                catalogMod.InstallButtonText =
+                    installed
+                        ? "Zainstalowany ✓"
+                        : "Pobierz";
+
+                catalogMod.CanInstall =
+                    !installed;
+
+                catalogMod.InstallationStatus =
+                    installed
+                        ? "Zainstalowany"
+                        : "";
+            }
+
+            if (CatalogTiles != null)
+            {
+                ApplyCatalogSearch();
+            }
+
+            if (CatalogDetailView != null &&
+                CatalogDetailView.DataContext is CatalogMod selectedMod)
+            {
+                CatalogDetailView.DataContext = null;
+                CatalogDetailView.DataContext = selectedMod;
+            }
+        }
+
+        private bool IsCatalogModInstalled(
+            CatalogMod catalogMod)
+        {
+            if (!string.IsNullOrWhiteSpace(
+                    catalogMod.RepositoryId))
+            {
+                bool idMatch =
+                    currentMods.Any(localMod =>
+                        !string.IsNullOrWhiteSpace(
+                            localMod.RepositoryId) &&
+                        localMod.RepositoryId != "Nie podano" &&
+                        localMod.RepositoryId.Equals(
+                            catalogMod.RepositoryId,
+                            StringComparison.OrdinalIgnoreCase));
+
+                if (idMatch)
+                {
+                    return true;
+                }
+            }
+
+            string catalogTitle =
+                NormalizeModTitle(
+                    catalogMod.Title);
+
+            if (string.IsNullOrWhiteSpace(
+                catalogTitle))
+            {
+                return false;
+            }
+
+            return currentMods.Any(localMod =>
+            {
+                string repositoryTitle =
+                    NormalizeModTitle(
+                        localMod.RepositoryTitle);
+
+                if (!string.IsNullOrWhiteSpace(repositoryTitle) &&
+                    repositoryTitle !=
+                        NormalizeModTitle("Nie podano") &&
+                    repositoryTitle.Equals(
+                        catalogTitle,
+                        StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                string localName =
+                    NormalizeModTitle(
+                        localMod.Name);
+
+                return localName.Equals(
+                    catalogTitle,
+                    StringComparison.OrdinalIgnoreCase);
+            });
+        }
+
+        private string ExtractRepositoryIdFromResourceUrl(
+            string resourceUrl)
+        {
+            Match match =
+                Regex.Match(
+                    resourceUrl,
+                    @"\.([0-9]+)/?(?:\?.*)?$");
+
+            return match.Success
+                ? match.Groups[1].Value
+                : "";
+        }
+
+        private string NormalizeModTitle(
+            string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "";
+            }
+
+            string normalized =
+                WebUtility.HtmlDecode(value)
+                    .ToLowerInvariant();
+
+            normalized =
+                Regex.Replace(
+                    normalized,
+                    @"[^a-z0-9]+",
+                    " ");
+
+            return Regex.Replace(
+                    normalized,
+                    @"\s+",
+                    " ")
+                .Trim();
+        }
+
         private void ApplyCatalogSearch()
         {
             if (CatalogTiles == null ||
@@ -1147,6 +1282,7 @@ namespace BeamNGModManager
                 catalogMods =
                     await LoadBeamNgCatalogAsync();
 
+                UpdateCatalogInstallationState();
                 ApplyCatalogSearch();
 
                 CatalogStatusText.Text =
@@ -1278,6 +1414,9 @@ namespace BeamNGModManager
                                 ExtractThumbnailUrl(
                                     nearby,
                                     pageUri),
+                            RepositoryId =
+                                ExtractRepositoryIdFromResourceUrl(
+                                    absoluteUrl),
                             ResourceUrl =
                                 absoluteUrl
                         });
@@ -1388,6 +1527,9 @@ namespace BeamNGModManager
                     ExtractThumbnailUrl(
                         card,
                         pageUri),
+                RepositoryId =
+                    ExtractRepositoryIdFromResourceUrl(
+                        resourceUrl),
                 ResourceUrl =
                     resourceUrl
             };
@@ -3832,9 +3974,14 @@ namespace BeamNGModManager
         public string FirstRelease { get; set; } = "—";
         public string LastUpdate { get; set; } = "—";
         public string Rating { get; set; } = "—";
+        public string RepositoryId { get; set; } = "";
         public string ResourceUrl { get; set; } = "";
         public List<string> GalleryImages { get; set; } =
             new List<string>();
+        public bool IsInstalled { get; set; }
+        public bool CanInstall { get; set; } = true;
+        public string InstallButtonText { get; set; } = "Pobierz";
+        public string InstallationStatus { get; set; } = "";
         public bool DetailsLoaded { get; set; }
     }
 
