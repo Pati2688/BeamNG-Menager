@@ -1012,13 +1012,16 @@ namespace BeamNGModManager
             try
             {
                 Task<List<CatalogMod>> beamNgTask =
-                    LoadBeamNgCatalogAsync();
+                    SafeLoadCatalogAsync(
+                        LoadBeamNgCatalogAsync);
 
                 Task<List<CatalogMod>> modLandTask =
-                    LoadModLandCatalogAsync();
+                    SafeLoadCatalogAsync(
+                        LoadModLandCatalogAsync);
 
                 Task<List<CatalogMod>> modDbTask =
-                    LoadModDbCatalogAsync();
+                    SafeLoadCatalogAsync(
+                        LoadModDbCatalogAsync);
 
                 List<CatalogMod>[] results =
                     await Task.WhenAll(
@@ -1077,6 +1080,19 @@ namespace BeamNGModManager
             {
                 RefreshCatalogButton.IsEnabled = true;
                 DownloadModsButton.IsEnabled = true;
+            }
+        }
+
+        private async Task<List<CatalogMod>> SafeLoadCatalogAsync(
+            Func<Task<List<CatalogMod>>> loader)
+        {
+            try
+            {
+                return await loader();
+            }
+            catch
+            {
+                return new List<CatalogMod>();
             }
         }
 
