@@ -28,7 +28,7 @@ namespace BeamNGModManager
             // BeamNG jest wykrywany automatycznie przy uruchomieniu programu.
             // Przycisk w panelu służy później tylko do ręcznego ponownego sprawdzenia.
             Loaded += (_, _) =>
-                DetectButton_Click(this, new RoutedEventArgs());
+                DetectBeamNg(true);
         }
 
         private static HttpClient CreateHttpClient()
@@ -44,7 +44,14 @@ namespace BeamNGModManager
             return client;
         }
 
-        private void DetectButton_Click(object sender, RoutedEventArgs e)
+        private void DetectButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            DetectBeamNg(false);
+        }
+
+        private void DetectBeamNg(bool scanModsAfterDetection)
         {
             string localAppData =
                 Environment.GetFolderPath(
@@ -129,7 +136,7 @@ namespace BeamNGModManager
             if (!Directory.Exists(userFolder))
             {
                 StatusText.Text =
-                    "Nie znaleziono folderu użytkownika BeamNG.\n\n" +
+                    "Nie znaleziono BeamNG lub folderu użytkownika.\n\n" +
                     userFolder;
 
                 ScanModsButton.IsEnabled = false;
@@ -146,17 +153,21 @@ namespace BeamNGModManager
                 Directory.CreateDirectory(modsFolder);
             }
 
-            StatusText.Text =
-                "Znaleziono BeamNG\n" +
-                "Wersja gry: " + gameVersion + "\n" +
-                "Folder modów: " + modsFolder;
-
             ScanModsButton.IsEnabled = true;
             InstallModButton.IsEnabled = true;
             CheckUpdatesButton.IsEnabled = true;
 
-            // Po poprawnym wykryciu gry od razu ładujemy bibliotekę.
-            ScanMods();
+            if (scanModsAfterDetection)
+            {
+                ScanMods();
+                return;
+            }
+
+            StatusText.Text =
+                "BeamNG wykryty poprawnie. Wersja: " +
+                gameVersion +
+                " | Folder modów: " +
+                modsFolder;
         }
 
         private string? DetectGameVersionFromExecutable()
@@ -239,6 +250,18 @@ namespace BeamNGModManager
                 return;
             }
 
+            Dictionary<string, string> previousUpdateStatuses =
+                currentMods
+                    .Where(mod =>
+                        !string.IsNullOrWhiteSpace(mod.FilePath))
+                    .GroupBy(
+                        mod => mod.FilePath,
+                        StringComparer.OrdinalIgnoreCase)
+                    .ToDictionary(
+                        group => group.Key,
+                        group => group.First().UpdateStatus,
+                        StringComparer.OrdinalIgnoreCase);
+
             List<ModInfo> mods =
                 new List<ModInfo>();
 
@@ -283,6 +306,20 @@ namespace BeamNGModManager
                         fileStatus,
                         type);
 
+                string updateStatus =
+                    BuildUpdateStatus(
+                        source,
+                        metadata);
+
+                if (previousUpdateStatuses.TryGetValue(
+                    file,
+                    out string? previousUpdateStatus) &&
+                    !string.IsNullOrWhiteSpace(previousUpdateStatus))
+                {
+                    updateStatus =
+                        previousUpdateStatus;
+                }
+
                 mods.Add(new ModInfo
                 {
                     Name =
@@ -310,9 +347,7 @@ namespace BeamNGModManager
                         metadata.ReleaseDate,
 
                     UpdateStatus =
-                        BuildUpdateStatus(
-                            source,
-                            metadata),
+                        updateStatus,
 
                     Size =
                         FormatSize(info.Length),
@@ -342,7 +377,7 @@ namespace BeamNGModManager
             RefreshGrid();
 
             StatusText.Text =
-                "Wersja BeamNG: " +
+                "Biblioteka odświeżona. Wersja BeamNG: " +
                 gameVersion +
                 " | Znaleziono modów: " +
                 currentMods.Count;
