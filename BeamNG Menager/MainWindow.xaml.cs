@@ -1168,10 +1168,20 @@ namespace BeamNGModManager
 
             if (!string.IsNullOrWhiteSpace(image))
             {
-                mod.ThumbnailUrl =
+                string absoluteImageUrl =
                     MakeAbsoluteUrl(
                         image,
                         pageUri);
+
+                string cachedImage =
+                    await CacheThumbnailAsync(
+                        absoluteImageUrl,
+                        mod.ResourceUrl);
+
+                mod.ThumbnailUrl =
+                    string.IsNullOrWhiteSpace(cachedImage)
+                        ? absoluteImageUrl
+                        : cachedImage;
             }
 
             string description =
@@ -1258,6 +1268,88 @@ namespace BeamNGModManager
             }
 
             return "";
+        }
+
+        private async Task<string> CacheThumbnailAsync(
+            string imageUrl,
+            string resourceUrl)
+        {
+            try
+            {
+                Uri imageUri =
+                    new Uri(imageUrl);
+
+                Match resourceIdMatch =
+                    Regex.Match(
+                        resourceUrl,
+                        @"\.([0-9]+)/?$");
+
+                string resourceId =
+                    resourceIdMatch.Success
+                        ? resourceIdMatch.Groups[1].Value
+                        : Guid.NewGuid().ToString("N");
+
+                string extension =
+                    Path.GetExtension(
+                        imageUri.AbsolutePath)
+                        .ToLowerInvariant();
+
+                if (extension != ".jpg" &&
+                    extension != ".jpeg" &&
+                    extension != ".png" &&
+                    extension != ".webp")
+                {
+                    extension = ".jpg";
+                }
+
+                string cacheDirectory =
+                    Path.Combine(
+                        Environment.GetFolderPath(
+                            Environment.SpecialFolder.LocalApplicationData),
+                        "BeamNGModManager",
+                        "Cache",
+                        "Thumbnails");
+
+                Directory.CreateDirectory(
+                    cacheDirectory);
+
+                string cacheFile =
+                    Path.Combine(
+                        cacheDirectory,
+                        resourceId +
+                        extension);
+
+                if (!File.Exists(cacheFile) ||
+                    new FileInfo(cacheFile).Length == 0)
+                {
+                    using HttpResponseMessage response =
+                        await httpClient.GetAsync(
+                            imageUri);
+
+                    response.EnsureSuccessStatusCode();
+
+                    byte[] bytes =
+                        await response.Content
+                            .ReadAsByteArrayAsync();
+
+                    if (bytes.Length == 0)
+                    {
+                        return "";
+                    }
+
+                    await File.WriteAllBytesAsync(
+                        cacheFile,
+                        bytes);
+                }
+
+                return new Uri(
+                    cacheFile)
+                    .AbsoluteUri;
+            }
+            catch
+            {
+                return "";
+            }
         }
 
         private string MakeAbsoluteUrl(
