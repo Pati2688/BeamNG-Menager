@@ -574,7 +574,7 @@
                                FontSize="27"
                                FontWeight="Bold"/>
 
-                    <TextBlock Text="24 najnowsze mody — 4 kafelki w rzędzie × 6 rzędów"
+                    <TextBlock Text="Pełne Repo BeamNG — kolejne strony doczytują się podczas przewijania"
                                Foreground="{StaticResource TextMutedBrush}"
                                FontSize="13"
                                Margin="0,4,0,0"/>
@@ -635,8 +635,10 @@
                         CornerRadius="12"
                         Padding="10">
 
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
+                    <ScrollViewer x:Name="CatalogScrollViewer"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled"
+                                  ScrollChanged="CatalogScrollViewer_ScrollChanged">
 
                         <ItemsControl x:Name="CatalogTiles">
 
