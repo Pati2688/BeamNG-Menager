@@ -7,6 +7,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
+    <AssemblyName>Mods Manager BeamNG</AssemblyName>
+    <Product>Mods Manager BeamNG</Product>
   </PropertyGroup>
 
 </Project>
