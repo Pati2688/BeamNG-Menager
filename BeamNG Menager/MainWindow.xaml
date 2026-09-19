@@ -612,7 +612,7 @@
                                        FontSize="15"
                                        Margin="0,4,0,8"/>
 
-                            <TextBlock Text="{Binding CompatibilityReason, TargetNullValue=Wybierz mod, aby zobaczyć szczegóły analizy.}"
+                            <TextBlock Text="{Binding CompatibilityReason, TargetNullValue=Brak szczegółów analizy}"
                                        TextWrapping="Wrap"
                                        Foreground="#C7CED8"
                                        FontSize="12"/>
