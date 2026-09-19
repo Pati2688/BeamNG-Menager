@@ -1869,7 +1869,7 @@ namespace BeamNGModManager
                 }
 
                 using HttpResponseMessage response =
-                    await httpClient.SendAsync(
+                    await downloadClient.SendAsync(
                         request,
                         HttpCompletionOption.ResponseHeadersRead);
 
