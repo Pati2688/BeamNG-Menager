@@ -8,6 +8,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows;
 
@@ -995,6 +996,48 @@ namespace BeamNGModManager
             }
         }
 
+        private void CatalogTile_Click(
+            object sender,
+            System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (sender is not System.Windows.Controls.Border border ||
+                border.DataContext is not CatalogMod mod)
+            {
+                return;
+            }
+
+            CatalogDetailView.DataContext = null;
+            CatalogDetailView.DataContext = mod;
+
+            CatalogBrowseView.Visibility =
+                Visibility.Collapsed;
+
+            CatalogDetailView.Visibility =
+                Visibility.Visible;
+
+            CatalogStatusText.Text =
+                "Szczegóły: " +
+                mod.Title;
+
+            e.Handled = true;
+        }
+
+        private void CatalogDetailBackButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            CatalogDetailView.Visibility =
+                Visibility.Collapsed;
+
+            CatalogBrowseView.Visibility =
+                Visibility.Visible;
+
+            CatalogStatusText.Text =
+                "Gotowe: " +
+                catalogMods.Count +
+                " modów z Repo BeamNG.";
+        }
+
         private async void RefreshCatalogButton_Click(
             object sender,
             RoutedEventArgs e)
@@ -1014,6 +1057,12 @@ namespace BeamNGModManager
             {
                 catalogMods =
                     await LoadBeamNgCatalogAsync();
+
+                CatalogStatusText.Text =
+                    "Wczytywanie zdjęć i szczegółów modów...";
+
+                await EnrichBeamNgCatalogAsync(
+                    catalogMods);
 
                 CatalogTiles.ItemsSource = null;
                 CatalogTiles.ItemsSource = catalogMods;
@@ -1047,6 +1096,269 @@ namespace BeamNGModManager
             {
                 return new List<CatalogMod>();
             }
+        }
+
+        private async Task EnrichBeamNgCatalogAsync(
+            List<CatalogMod> mods)
+        {
+            using SemaphoreSlim semaphore =
+                new SemaphoreSlim(6);
+
+            IEnumerable<Task> tasks =
+                mods.Select(
+                    async mod =>
+                    {
+                        await semaphore.WaitAsync();
+
+                        try
+                        {
+                            await EnrichBeamNgModAsync(
+                                mod);
+                        }
+                        catch
+                        {
+                            // Kafelek pozostaje dostępny nawet wtedy,
+                            // gdy pojedyncza strona moda nie odpowie.
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    });
+
+            await Task.WhenAll(tasks);
+        }
+
+        private async Task EnrichBeamNgModAsync(
+            CatalogMod mod)
+        {
+            if (string.IsNullOrWhiteSpace(
+                mod.ResourceUrl))
+            {
+                return;
+            }
+
+            string html =
+                await httpClient.GetStringAsync(
+                    mod.ResourceUrl);
+
+            Uri pageUri =
+                new Uri(mod.ResourceUrl);
+
+            string image =
+                ExtractMetaContent(
+                    html,
+                    "og:image");
+
+            if (string.IsNullOrWhiteSpace(image))
+            {
+                image =
+                    ExtractMetaContent(
+                        html,
+                        "twitter:image");
+            }
+
+            if (string.IsNullOrWhiteSpace(image))
+            {
+                image =
+                    ExtractThumbnailUrl(
+                        html,
+                        pageUri);
+            }
+
+            if (!string.IsNullOrWhiteSpace(image))
+            {
+                mod.ThumbnailUrl =
+                    MakeAbsoluteUrl(
+                        image,
+                        pageUri);
+            }
+
+            string description =
+                ExtractResourceDescription(
+                    html);
+
+            if (!string.IsNullOrWhiteSpace(
+                description))
+            {
+                mod.Description =
+                    description;
+            }
+
+            string author =
+                ExtractFirstText(
+                    html,
+                    "class=[\\\"'][^\\\"']*(?:username|username--style)[^\\\"']*[\\\"'][^>]*>(?<text>.*?)</a>");
+
+            if (!string.IsNullOrWhiteSpace(
+                author))
+            {
+                mod.Author =
+                    author;
+            }
+
+            string category =
+                ExtractFirstText(
+                    html,
+                    "href=[\\\"'][^\\\"']*/resources/categories/[^\\\"']+[\\\"'][^>]*>(?<text>.*?)</a>");
+
+            if (!string.IsNullOrWhiteSpace(
+                category))
+            {
+                mod.Category =
+                    category;
+            }
+
+            string version =
+                ExtractResourceVersion(
+                    html);
+
+            if (!string.IsNullOrWhiteSpace(
+                version))
+            {
+                mod.Version =
+                    version;
+            }
+        }
+
+        private string ExtractMetaContent(
+            string html,
+            string propertyName)
+        {
+            string escaped =
+                Regex.Escape(
+                    propertyName);
+
+            string[] patterns =
+            {
+                "<meta[^>]+(?:property|name)=[\\\"']" +
+                escaped +
+                "[\\\"'][^>]+content=[\\\"'](?<value>[^\\\"']+)[\\\"'][^>]*>",
+
+                "<meta[^>]+content=[\\\"'](?<value>[^\\\"']+)[\\\"'][^>]+(?:property|name)=[\\\"']" +
+                escaped +
+                "[\\\"'][^>]*>"
+            };
+
+            foreach (string pattern in patterns)
+            {
+                Match match =
+                    Regex.Match(
+                        html,
+                        pattern,
+                        RegexOptions.IgnoreCase |
+                        RegexOptions.Singleline);
+
+                if (match.Success)
+                {
+                    return WebUtility.HtmlDecode(
+                        match.Groups["value"].Value)
+                        .Trim();
+                }
+            }
+
+            return "";
+        }
+
+        private string MakeAbsoluteUrl(
+            string value,
+            Uri baseUri)
+        {
+            if (Uri.TryCreate(
+                value,
+                UriKind.Absolute,
+                out Uri? absoluteUri))
+            {
+                return absoluteUri.ToString();
+            }
+
+            return new Uri(
+                baseUri,
+                value)
+                .ToString();
+        }
+
+        private string ExtractResourceDescription(
+            string html)
+        {
+            Match body =
+                Regex.Match(
+                    html,
+                    "<div[^>]*class=[\\\"'][^\\\"']*bbWrapper[^\\\"']*[\\\"'][^>]*>(?<text>.*?)</div>",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            if (body.Success)
+            {
+                string text =
+                    StripHtml(
+                        body.Groups["text"].Value);
+
+                if (text.Length >= 40)
+                {
+                    return text.Length > 3000
+                        ? text.Substring(0, 2997) + "..."
+                        : text;
+                }
+            }
+
+            string description =
+                ExtractMetaContent(
+                    html,
+                    "og:description");
+
+            if (string.IsNullOrWhiteSpace(
+                description))
+            {
+                description =
+                    ExtractMetaContent(
+                        html,
+                        "description");
+            }
+
+            description =
+                StripHtml(description);
+
+            return description.Length > 3000
+                ? description.Substring(0, 2997) + "..."
+                : description;
+        }
+
+        private string ExtractResourceVersion(
+            string html)
+        {
+            Match structured =
+                Regex.Match(
+                    html,
+                    "Version\\s*</dt>\\s*<dd[^>]*>(?<value>.*?)</dd>",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            if (structured.Success)
+            {
+                string value =
+                    StripHtml(
+                        structured.Groups["value"].Value);
+
+                if (!string.IsNullOrWhiteSpace(
+                    value))
+                {
+                    return value;
+                }
+            }
+
+            string plain =
+                StripHtml(html);
+
+            Match fallback =
+                Regex.Match(
+                    plain,
+                    "\\bVersion\\s+(?<value>[0-9][0-9A-Za-z._+\\-]*)",
+                    RegexOptions.IgnoreCase);
+
+            return fallback.Success
+                ? fallback.Groups["value"].Value.Trim()
+                : "—";
         }
 
         private async Task<List<CatalogMod>> LoadBeamNgCatalogAsync()
@@ -1474,6 +1786,8 @@ namespace BeamNGModManager
             object sender,
             RoutedEventArgs e)
         {
+            e.Handled = true;
+
             if (sender is not System.Windows.Controls.Button button ||
                 button.DataContext is not CatalogMod mod)
             {
@@ -2559,6 +2873,7 @@ namespace BeamNGModManager
         public string Category { get; set; } = "";
         public string Description { get; set; } = "";
         public string ThumbnailUrl { get; set; } = "";
+        public string Version { get; set; } = "—";
         public string ResourceUrl { get; set; } = "";
     }
 
