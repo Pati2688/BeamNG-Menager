@@ -49,6 +49,14 @@
                     IsEnabled="False"
                     Click="InstallModButton_Click"/>
 
+            <Button x:Name="CheckUpdatesButton"
+                    Content="Sprawdź aktualizacje"
+                    Width="180"
+                    Height="40"
+                    Margin="5"
+                    IsEnabled="False"
+                    Click="CheckUpdatesButton_Click"/>
+
         </StackPanel>
 
         <TextBlock x:Name="StatusText"
@@ -85,7 +93,7 @@
 
                 <DataGridTextColumn Header="Aktualizacje"
                                     Binding="{Binding UpdateStatus}"
-                                    Width="165"/>
+                                    Width="180"/>
 
                 <DataGridTextColumn Header="Rozmiar"
                                     Binding="{Binding Size}"
