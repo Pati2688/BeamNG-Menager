@@ -39,9 +39,6 @@ namespace BeamNGModManager
         {
             InitializeComponent();
 
-            CatalogSortComboBox.SelectionChanged +=
-                CatalogSortComboBox_SelectionChanged;
-
             // BeamNG jest wykrywany automatycznie przy uruchomieniu programu.
             // Przycisk w panelu służy później tylko do ręcznego ponownego sprawdzenia.
             Loaded += (_, _) =>
@@ -1116,58 +1113,6 @@ namespace BeamNGModManager
             {
                 await LoadNextCatalogPageAsync();
             }
-        }
-
-        private async void CatalogSortComboBox_SelectionChanged(
-            object sender,
-            System.Windows.Controls.SelectionChangedEventArgs e)
-        {
-            if (CatalogSortComboBox?.SelectedItem is not
-                System.Windows.Controls.ComboBoxItem selectedItem)
-            {
-                return;
-            }
-
-            string mode =
-                selectedItem.Tag?.ToString() ??
-                "date";
-
-            catalogSortMode =
-                mode;
-
-            if (!IsLoaded)
-            {
-                catalogServerOrder =
-                    mode == "downloads"
-                        ? "download_count"
-                        : "resource_date";
-
-                return;
-            }
-
-            if (mode == "size")
-            {
-                ApplyCatalogSearch();
-                return;
-            }
-
-            string desiredServerOrder =
-                mode == "downloads"
-                    ? "download_count"
-                    : "resource_date";
-
-            if (!desiredServerOrder.Equals(
-                catalogServerOrder,
-                StringComparison.OrdinalIgnoreCase))
-            {
-                catalogServerOrder =
-                    desiredServerOrder;
-
-                await LoadCatalogAsync();
-                return;
-            }
-
-            ApplyCatalogSearch();
         }
 
         private void CatalogSearchBox_TextChanged(
