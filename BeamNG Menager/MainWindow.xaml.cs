@@ -1,6 +1,7 @@
-﻿using Microsoft.Win32;
+using Microsoft.Win32;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
@@ -43,9 +44,7 @@ namespace BeamNGModManager
             {
                 try
                 {
-                    string[] lines = File.ReadAllLines(iniPath);
-
-                    foreach (string line in lines)
+                    foreach (string line in File.ReadAllLines(iniPath))
                     {
                         string trimmed = line.Trim();
 
@@ -53,10 +52,15 @@ namespace BeamNGModManager
                             "version=",
                             StringComparison.OrdinalIgnoreCase))
                         {
-                            gameVersion = trimmed
+                            string value = trimmed
                                 .Substring("version=".Length)
                                 .Trim()
                                 .Trim('"');
+
+                            if (!string.IsNullOrWhiteSpace(value))
+                            {
+                                gameVersion = value;
+                            }
                         }
 
                         if (trimmed.StartsWith(
@@ -68,10 +72,19 @@ namespace BeamNGModManager
                                 .Trim()
                                 .Trim('"');
 
-                            if (!string.IsNullOrWhiteSpace(value) &&
-                                Path.IsPathRooted(value))
+                            if (!string.IsNullOrWhiteSpace(value))
                             {
-                                userFolder = value;
+                                if (Path.IsPathRooted(value))
+                                {
+                                    userFolder = value;
+                                }
+                                else
+                                {
+                                    userFolder = Path.GetFullPath(
+                                        Path.Combine(
+                                            beamNgBaseFolder,
+                                            value));
+                                }
                             }
                         }
                     }
@@ -79,6 +92,13 @@ namespace BeamNGModManager
                 catch
                 {
                 }
+            }
+
+            string executableVersion = DetectGameVersionFromExecutable();
+
+            if (!string.IsNullOrWhiteSpace(executableVersion))
+            {
+                gameVersion = executableVersion;
             }
 
             if (!Directory.Exists(userFolder))
@@ -89,7 +109,6 @@ namespace BeamNGModManager
 
                 ScanModsButton.IsEnabled = false;
                 InstallModButton.IsEnabled = false;
-
                 return;
             }
 
@@ -108,6 +127,68 @@ namespace BeamNGModManager
 
             ScanModsButton.IsEnabled = true;
             InstallModButton.IsEnabled = true;
+        }
+
+        private string? DetectGameVersionFromExecutable()
+        {
+            string programFilesX86 =
+                Environment.GetFolderPath(
+                    Environment.SpecialFolder.ProgramFilesX86);
+
+            string programFiles =
+                Environment.GetFolderPath(
+                    Environment.SpecialFolder.ProgramFiles);
+
+            string[] candidates =
+            {
+                Path.Combine(
+                    programFilesX86,
+                    "Steam",
+                    "steamapps",
+                    "common",
+                    "BeamNG.drive",
+                    "BeamNG.drive.x64.exe"),
+
+                Path.Combine(
+                    programFiles,
+                    "Steam",
+                    "steamapps",
+                    "common",
+                    "BeamNG.drive",
+                    "BeamNG.drive.x64.exe")
+            };
+
+            foreach (string path in candidates)
+            {
+                if (!File.Exists(path))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    FileVersionInfo info =
+                        FileVersionInfo.GetVersionInfo(path);
+
+                    string? version =
+                        info.ProductVersion;
+
+                    if (string.IsNullOrWhiteSpace(version))
+                    {
+                        version = info.FileVersion;
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(version))
+                    {
+                        return version.Trim();
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return null;
         }
 
         private void ScanModsButton_Click(
@@ -160,6 +241,12 @@ namespace BeamNGModManager
                 string type =
                     DetectModType(file);
 
+                string source =
+                    DetectSource(file);
+
+                ModMetadata metadata =
+                    DetectModMetadata(file);
+
                 CompatibilityResult compatibility =
                     CheckCompatibility(
                         file,
@@ -172,13 +259,24 @@ namespace BeamNGModManager
                         Path.GetFileNameWithoutExtension(file),
 
                     Source =
-                        DetectSource(file),
+                        source,
 
                     Type =
                         type,
 
                     ModVersion =
-                        DetectModVersion(file),
+                        metadata.Version,
+
+                    RepositoryId =
+                        metadata.RepositoryId,
+
+                    ReleaseDate =
+                        metadata.ReleaseDate,
+
+                    UpdateStatus =
+                        BuildUpdateStatus(
+                            source,
+                            metadata),
 
                     Size =
                         FormatSize(info.Length),
@@ -210,6 +308,28 @@ namespace BeamNGModManager
                 mods.Count;
         }
 
+        private string BuildUpdateStatus(
+            string source,
+            ModMetadata metadata)
+        {
+            if (source == "Repo BeamNG")
+            {
+                if (metadata.RepositoryId != "Nie podano")
+                {
+                    return "Gotowy do sprawdzenia";
+                }
+
+                return "Brak ID repo";
+            }
+
+            if (source == "Automation")
+            {
+                return "Brak źródła online";
+            }
+
+            return "Brak danych źródła";
+        }
+
         private void InstallModButton_Click(
             object sender,
             RoutedEventArgs e)
@@ -224,15 +344,12 @@ namespace BeamNGModManager
             }
 
             OpenFileDialog dialog =
-                new OpenFileDialog();
-
-            dialog.Title =
-                "Wybierz mod BeamNG";
-
-            dialog.Filter =
-                "Mody BeamNG (*.zip)|*.zip";
-
-            dialog.Multiselect = false;
+                new OpenFileDialog
+                {
+                    Title = "Wybierz mod BeamNG",
+                    Filter = "Mody BeamNG (*.zip)|*.zip",
+                    Multiselect = false
+                };
 
             if (dialog.ShowDialog() != true)
             {
@@ -452,29 +569,44 @@ namespace BeamNGModManager
             }
         }
 
-        private string DetectModVersion(string file)
+        private ModMetadata DetectModMetadata(string file)
         {
+            ModMetadata metadata =
+                new ModMetadata();
+
             try
             {
                 using ZipArchive archive =
                     ZipFile.OpenRead(file);
 
-                foreach (ZipArchiveEntry entry in archive.Entries)
+                List<ZipArchiveEntry> candidates =
+                    archive.Entries
+                        .Where(entry =>
+                        {
+                            string path =
+                                entry.FullName
+                                    .Replace('\\', '/')
+                                    .ToLowerInvariant();
+
+                            return path.EndsWith(".json") &&
+                                   (
+                                       path.Contains("mod_info") ||
+                                       path.EndsWith("/info.json") ||
+                                       path == "info.json" ||
+                                       path.Contains("metadata")
+                                   );
+                        })
+                        .OrderBy(entry =>
+                            entry.FullName.Contains(
+                                "mod_info",
+                                StringComparison.OrdinalIgnoreCase)
+                                ? 0
+                                : 1)
+                        .ToList();
+
+                foreach (ZipArchiveEntry entry in candidates)
                 {
-                    string path =
-                        entry.FullName
-                            .ToLowerInvariant();
-
-                    if (!path.EndsWith(".json"))
-                    {
-                        continue;
-                    }
-
-                    if (!path.Contains("info") &&
-                        !path.Contains("mod"))
-                    {
-                        continue;
-                    }
+                    string text;
 
                     try
                     {
@@ -484,61 +616,115 @@ namespace BeamNGModManager
                         using StreamReader reader =
                             new StreamReader(stream);
 
-                        string text =
+                        text =
                             reader.ReadToEnd();
-
-                        string? version =
-                            ExtractVersion(text);
-
-                        if (!string.IsNullOrWhiteSpace(version))
-                        {
-                            return version;
-                        }
                     }
                     catch
                     {
+                        continue;
+                    }
+
+                    if (metadata.Version == "Nie podano")
+                    {
+                        metadata.Version =
+                            ExtractFirstValue(
+                                text,
+                                new[]
+                                {
+                                    "version_string",
+                                    "versionString",
+                                    "modVersion",
+                                    "mod_version",
+                                    "version"
+                                });
+                    }
+
+                    if (metadata.RepositoryId == "Nie podano")
+                    {
+                        metadata.RepositoryId =
+                            ExtractFirstValue(
+                                text,
+                                new[]
+                                {
+                                    "resource_id",
+                                    "resourceId",
+                                    "repository_id",
+                                    "repositoryId"
+                                });
+                    }
+
+                    if (metadata.ReleaseDate == "Nie podano")
+                    {
+                        metadata.ReleaseDate =
+                            ExtractFirstValue(
+                                text,
+                                new[]
+                                {
+                                    "last_update",
+                                    "lastUpdate",
+                                    "updated",
+                                    "updateDate",
+                                    "releaseDate",
+                                    "date"
+                                });
+                    }
+
+                    if (metadata.Version != "Nie podano" &&
+                        metadata.RepositoryId != "Nie podano" &&
+                        metadata.ReleaseDate != "Nie podano")
+                    {
+                        break;
                     }
                 }
             }
             catch
             {
-                return "Błąd";
+                metadata.Version = "Błąd";
             }
 
-            return "Nie podano";
+            return metadata;
         }
 
-        private string? ExtractVersion(string text)
+        private string ExtractFirstValue(
+            string text,
+            IEnumerable<string> keys)
         {
-            string[] patterns =
+            foreach (string key in keys)
             {
-                "\"version\"\\s*:\\s*\"([^\"]+)\"",
-                "\"version_string\"\\s*:\\s*\"([^\"]+)\"",
-                "\"versionString\"\\s*:\\s*\"([^\"]+)\"",
-                "\"modVersion\"\\s*:\\s*\"([^\"]+)\"",
-                "\"mod_version\"\\s*:\\s*\"([^\"]+)\"",
-                "\"version\"\\s*:\\s*([0-9.]+)"
-            };
+                string escapedKey =
+                    Regex.Escape(key);
 
-            foreach (string pattern in patterns)
-            {
-                Match match =
-                    Regex.Match(
-                        text,
-                        pattern,
-                        RegexOptions.IgnoreCase);
-
-                if (match.Success &&
-                    match.Groups.Count > 1)
+                string[] patterns =
                 {
-                    return
-                        match.Groups[1]
-                            .Value
-                            .Trim();
+                    $"\"{escapedKey}\"\\s*:\\s*\"([^\"]+)\"",
+                    $"\"{escapedKey}\"\\s*:\\s*([0-9]+(?:\\.[0-9]+)*)"
+                };
+
+                foreach (string pattern in patterns)
+                {
+                    Match match =
+                        Regex.Match(
+                            text,
+                            pattern,
+                            RegexOptions.IgnoreCase);
+
+                    if (match.Success &&
+                        match.Groups.Count > 1)
+                    {
+                        string value =
+                            match.Groups[1]
+                                .Value
+                                .Trim();
+
+                        if (!string.IsNullOrWhiteSpace(value))
+                        {
+                            return value;
+                        }
+                    }
                 }
             }
 
-            return null;
+            return "Nie podano";
         }
 
         private string CheckZip(string file)
@@ -726,6 +912,13 @@ namespace BeamNGModManager
         }
     }
 
+    public class ModMetadata
+    {
+        public string Version { get; set; } = "Nie podano";
+        public string RepositoryId { get; set; } = "Nie podano";
+        public string ReleaseDate { get; set; } = "Nie podano";
+    }
+
     public class CompatibilityResult
     {
         public string Status { get; set; } = "";
@@ -738,6 +931,9 @@ namespace BeamNGModManager
         public string Source { get; set; } = "";
         public string Type { get; set; } = "";
         public string ModVersion { get; set; } = "";
+        public string RepositoryId { get; set; } = "";
+        public string ReleaseDate { get; set; } = "";
+        public string UpdateStatus { get; set; } = "";
         public string Size { get; set; } = "";
         public string Modified { get; set; } = "";
         public string Status { get; set; } = "";
