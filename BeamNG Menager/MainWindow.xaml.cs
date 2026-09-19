@@ -2690,6 +2690,14 @@ namespace BeamNGModManager
                         }
                     }
 
+                    // Zamykamy plik przed sprawdzaniem ZIP-a.
+                    // Przy deklaracji using strumień pozostałby otwarty
+                    // do końca bieżącego zakresu i CheckZip nie mógłby
+                    // otworzyć pliku z FileShare.None.
+                    await output.FlushAsync();
+                    output.Close();
+                    input.Close();
+
                     string zipStatus =
                         CheckZip(tempFile);
 
