@@ -18,6 +18,7 @@ namespace BeamNGModManager
         private string? modsFolder;
         private string gameVersion = "Nieznana";
         private List<ModInfo> currentMods = new List<ModInfo>();
+        private List<CatalogMod> allCatalogMods = new List<CatalogMod>();
         private List<CatalogMod> catalogMods = new List<CatalogMod>();
 
         private static readonly HttpClient httpClient = CreateHttpClient();
@@ -994,6 +995,80 @@ namespace BeamNGModManager
             }
         }
 
+        private void AllSourcesCheckBox_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            bool enabled =
+                AllSourcesCheckBox.IsChecked == true;
+
+            RepoSourceCheckBox.IsChecked =
+                enabled;
+
+            ModLandSourceCheckBox.IsChecked =
+                enabled;
+
+            ModDbSourceCheckBox.IsChecked =
+                enabled;
+
+            ApplyCatalogFilter();
+        }
+
+        private void SourceFilterCheckBox_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            AllSourcesCheckBox.IsChecked =
+                RepoSourceCheckBox.IsChecked == true &&
+                ModLandSourceCheckBox.IsChecked == true &&
+                ModDbSourceCheckBox.IsChecked == true;
+
+            ApplyCatalogFilter();
+        }
+
+        private void ApplyCatalogFilter()
+        {
+            bool repoEnabled =
+                RepoSourceCheckBox.IsChecked == true;
+
+            bool modLandEnabled =
+                ModLandSourceCheckBox.IsChecked == true;
+
+            bool modDbEnabled =
+                ModDbSourceCheckBox.IsChecked == true;
+
+            catalogMods =
+                allCatalogMods
+                    .Where(mod =>
+                        (repoEnabled &&
+                         mod.Source == "Repo BeamNG") ||
+                        (modLandEnabled &&
+                         mod.Source == "ModLand") ||
+                        (modDbEnabled &&
+                         mod.Source == "ModDB"))
+                    .OrderBy(mod =>
+                        mod.Source == "Repo BeamNG"
+                            ? 0
+                            : mod.Source == "ModLand"
+                                ? 1
+                                : 2)
+                    .ThenBy(mod => mod.Title)
+                    .ToList();
+
+            CatalogGrid.ItemsSource = null;
+            CatalogGrid.ItemsSource = catalogMods;
+
+            if (allCatalogMods.Count > 0)
+            {
+                CatalogStatusText.Text =
+                    "Wyświetlane: " +
+                    catalogMods.Count +
+                    " z " +
+                    allCatalogMods.Count +
+                    " modów.";
+            }
+        }
+
         private async void RefreshCatalogButton_Click(
             object sender,
             RoutedEventArgs e)
@@ -1029,46 +1104,40 @@ namespace BeamNGModManager
                         modLandTask,
                         modDbTask);
 
-                catalogMods =
+                allCatalogMods =
                     results
                         .SelectMany(list => list)
                         .GroupBy(
                             mod => mod.ResourceUrl,
                             StringComparer.OrdinalIgnoreCase)
                         .Select(group => group.First())
-                        .OrderBy(mod =>
-                            mod.Source == "Repo BeamNG"
-                                ? 0
-                                : mod.Source == "ModLand"
-                                    ? 1
-                                    : 2)
-                        .ThenBy(mod => mod.Title)
                         .ToList();
 
-                CatalogGrid.ItemsSource = null;
-                CatalogGrid.ItemsSource = catalogMods;
-
                 int repoCount =
-                    catalogMods.Count(mod =>
+                    allCatalogMods.Count(mod =>
                         mod.Source == "Repo BeamNG");
 
                 int modLandCount =
-                    catalogMods.Count(mod =>
+                    allCatalogMods.Count(mod =>
                         mod.Source == "ModLand");
 
                 int modDbCount =
-                    catalogMods.Count(mod =>
+                    allCatalogMods.Count(mod =>
                         mod.Source == "ModDB");
+
+                ApplyCatalogFilter();
 
                 CatalogStatusText.Text =
                     "Gotowe: " +
-                    catalogMods.Count +
+                    allCatalogMods.Count +
                     " modów | Repo BeamNG: " +
                     repoCount +
                     " | ModLand: " +
                     modLandCount +
                     " | ModDB: " +
-                    modDbCount;
+                    modDbCount +
+                    " | Wyświetlane: " +
+                    catalogMods.Count;
             }
             catch (Exception ex)
             {
@@ -1107,7 +1176,7 @@ namespace BeamNGModManager
 
             Regex regex =
                 new Regex(
-                    "href=[\\\"'](?<url>/resources/(?<slug>[^\\\"']+\\.[0-9]+)/?)[\\\"'][^>]*>(?<title>.*?)</a>",
+                    "href=[\\\"'](?<url>(?:https://www\\.beamng\\.com)?/?resources/(?<slug>[^\\\"'#?]+\\.[0-9]+)/?)[\\\"'][^>]*>(?<title>.*?)</a>",
                     RegexOptions.IgnoreCase |
                     RegexOptions.Singleline);
 
@@ -1135,21 +1204,50 @@ namespace BeamNGModManager
                 }
 
                 string absoluteUrl =
-                    "https://www.beamng.com" +
-                    relativeUrl;
+                    Uri.TryCreate(
+                        relativeUrl,
+                        UriKind.Absolute,
+                        out Uri? absoluteResourceUri)
+                        ? absoluteResourceUri.ToString()
+                        : new Uri(
+                            new Uri("https://www.beamng.com/"),
+                            relativeUrl)
+                            .ToString();
 
                 if (!seen.Add(absoluteUrl))
                 {
                     continue;
                 }
 
+                string nearby =
+                    GetNearbyHtml(
+                        html,
+                        match.Index,
+                        1800);
+
+                string author =
+                    ExtractFirstText(
+                        nearby,
+                        "class=[\\\"'][^\\\"']*(?:username|username--style)[^\\\"']*[\\\"'][^>]*>(?<text>.*?)</a>");
+
+                string category =
+                    ExtractFirstText(
+                        nearby,
+                        "href=[\\\"'][^\\\"']*/resources/categories/[^\\\"']+[\\\"'][^>]*>(?<text>.*?)</a>");
+
                 result.Add(
                     new CatalogMod
                     {
                         Title = title,
                         Source = "Repo BeamNG",
-                        Author = "—",
-                        Category = "Repo",
+                        Author =
+                            string.IsNullOrWhiteSpace(author)
+                                ? "—"
+                                : author,
+                        Category =
+                            string.IsNullOrWhiteSpace(category)
+                                ? "Repo"
+                                : category,
                         Description =
                             ExtractNearbyDescription(
                                 html,
@@ -1325,6 +1423,46 @@ namespace BeamNGModManager
             }
 
             return result;
+        }
+
+        private string GetNearbyHtml(
+            string html,
+            int centerIndex,
+            int radius)
+        {
+            int start =
+                Math.Max(
+                    0,
+                    centerIndex - radius / 2);
+
+            int length =
+                Math.Min(
+                    radius,
+                    html.Length - start);
+
+            return html.Substring(
+                start,
+                length);
+        }
+
+        private string ExtractFirstText(
+            string html,
+            string pattern)
+        {
+            Match match =
+                Regex.Match(
+                    html,
+                    pattern,
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            if (!match.Success)
+            {
+                return "";
+            }
+
+            return StripHtml(
+                match.Groups["text"].Value);
         }
 
         private string StripHtml(string value)
