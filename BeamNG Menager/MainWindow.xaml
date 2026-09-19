@@ -382,7 +382,7 @@
 
                         <ComboBox x:Name="LanguageComboBox"
                                   Background="#1C2028"
-                                  Foreground="#F2F4F8"
+                                  Foreground="#111318"
                                   BorderThickness="0"
                                   Padding="8,6"
                                   ItemContainerStyle="{StaticResource DarkComboBoxItemStyle}"
@@ -691,7 +691,7 @@
 
                     <ComboBox x:Name="CatalogSortComboBox"
                               Background="#171A21"
-                              Foreground="#F2F4F8"
+                              Foreground="#111318"
                               BorderThickness="0"
                               Padding="9,6"
                               FontSize="13"
