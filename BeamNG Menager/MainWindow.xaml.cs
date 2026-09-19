@@ -52,13 +52,29 @@ namespace BeamNGModManager
 
         private static HttpClient CreateDownloadHttpClient()
         {
-            HttpClient client = new HttpClient
-            {
-                Timeout = TimeSpan.FromMinutes(30)
-            };
+            HttpClientHandler handler =
+                new HttpClientHandler
+                {
+                    AllowAutoRedirect = true,
+                    UseCookies = true,
+                    CookieContainer = new CookieContainer(),
+                    AutomaticDecompression =
+                        DecompressionMethods.GZip |
+                        DecompressionMethods.Deflate |
+                        DecompressionMethods.Brotli
+                };
+
+            HttpClient client =
+                new HttpClient(handler)
+                {
+                    Timeout = TimeSpan.FromMinutes(30)
+                };
 
             client.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BeamNGModManager/0.3");
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) BeamNGModManager/0.4");
+
+            client.DefaultRequestHeaders.Accept.ParseAdd(
+                "application/zip, application/octet-stream, text/html;q=0.9, */*;q=0.8");
 
             return client;
         }
@@ -2567,20 +2583,8 @@ namespace BeamNGModManager
         private async Task DownloadAndInstallCatalogModAsync(
             CatalogMod mod)
         {
-            Uri pageUri =
+            Uri currentUri =
                 new Uri(mod.ResourceUrl);
-
-            using HttpResponseMessage response =
-                await GetDownloadResponseAsync(
-                    pageUri,
-                    mod.Source);
-
-            response.EnsureSuccessStatusCode();
-
-            string fileName =
-                GetDownloadedFileName(
-                    response,
-                    mod.Title);
 
             string tempDirectory =
                 Path.Combine(
@@ -2590,96 +2594,175 @@ namespace BeamNGModManager
             Directory.CreateDirectory(
                 tempDirectory);
 
-            string tempFile =
-                Path.Combine(
-                    tempDirectory,
-                    Guid.NewGuid().ToString("N") +
-                    "_" +
-                    SanitizeFileName(fileName));
+            string? validTempFile =
+                null;
+
+            string? finalFileName =
+                null;
 
             try
             {
-                long? totalLength =
-                    response.Content.Headers.ContentLength;
-
-                using Stream input =
-                    await response.Content.ReadAsStreamAsync();
-
-                using FileStream output =
-                    new FileStream(
-                        tempFile,
-                        FileMode.Create,
-                        FileAccess.Write,
-                        FileShare.None,
-                        81920,
-                        useAsync: true);
-
-                byte[] buffer =
-                    new byte[81920];
-
-                long downloaded = 0;
-
-                while (true)
+                for (int attempt = 0;
+                    attempt < 3;
+                    attempt++)
                 {
-                    int read =
-                        await input.ReadAsync(
+                    using HttpResponseMessage response =
+                        await GetDownloadResponseAsync(
+                            currentUri,
+                            mod.Source);
+
+                    response.EnsureSuccessStatusCode();
+
+                    string fileName =
+                        GetDownloadedFileName(
+                            response,
+                            mod.Title);
+
+                    string tempFile =
+                        Path.Combine(
+                            tempDirectory,
+                            Guid.NewGuid().ToString("N") +
+                            "_" +
+                            SanitizeFileName(fileName));
+
+                    long? totalLength =
+                        response.Content.Headers.ContentLength;
+
+                    using Stream input =
+                        await response.Content.ReadAsStreamAsync();
+
+                    using FileStream output =
+                        new FileStream(
+                            tempFile,
+                            FileMode.Create,
+                            FileAccess.Write,
+                            FileShare.None,
+                            81920,
+                            useAsync: true);
+
+                    byte[] buffer =
+                        new byte[81920];
+
+                    long downloaded = 0;
+
+                    while (true)
+                    {
+                        int read =
+                            await input.ReadAsync(
+                                buffer,
+                                0,
+                                buffer.Length);
+
+                        if (read <= 0)
+                        {
+                            break;
+                        }
+
+                        await output.WriteAsync(
                             buffer,
                             0,
-                            buffer.Length);
+                            read);
 
-                    if (read <= 0)
+                        downloaded += read;
+
+                        if (totalLength.HasValue &&
+                            totalLength.Value > 0)
+                        {
+                            double percent =
+                                downloaded *
+                                100.0 /
+                                totalLength.Value;
+
+                            CatalogStatusText.Text =
+                                "Pobieranie „" +
+                                mod.Title +
+                                "”: " +
+                                percent.ToString("0") +
+                                "%";
+                        }
+                        else
+                        {
+                            CatalogStatusText.Text =
+                                "Pobieranie „" +
+                                mod.Title +
+                                "”: " +
+                                FormatSize(downloaded);
+                        }
+                    }
+
+                    string zipStatus =
+                        CheckZip(tempFile);
+
+                    if (zipStatus == "OK")
                     {
+                        validTempFile =
+                            tempFile;
+
+                        finalFileName =
+                            fileName;
+
                         break;
                     }
 
-                    await output.WriteAsync(
-                        buffer,
-                        0,
-                        read);
+                    Uri responseUri =
+                        response.RequestMessage?.RequestUri ??
+                        currentUri;
 
-                    downloaded += read;
+                    Uri? recoveryUri =
+                        TryExtractDownloadUriFromSavedPayload(
+                            tempFile,
+                            responseUri,
+                            mod.Source);
 
-                    if (totalLength.HasValue &&
-                        totalLength.Value > 0)
+                    try
                     {
-                        double percent =
-                            downloaded *
-                            100.0 /
-                            totalLength.Value;
-
-                        CatalogStatusText.Text =
-                            "Pobieranie „" +
-                            mod.Title +
-                            "”: " +
-                            percent.ToString("0") +
-                            "%";
+                        File.Delete(tempFile);
                     }
-                    else
+                    catch
                     {
-                        CatalogStatusText.Text =
-                            "Pobieranie „" +
-                            mod.Title +
-                            "”: " +
-                            FormatSize(downloaded);
                     }
+
+                    if (recoveryUri == null ||
+                        recoveryUri == currentUri ||
+                        attempt == 2)
+                    {
+                        string mediaType =
+                            response.Content.Headers
+                                .ContentType?
+                                .MediaType ??
+                            "brak";
+
+                        throw new InvalidDataException(
+                            "Repo BeamNG nie zwróciło poprawnego pliku ZIP. " +
+                            "Stan archiwum: " +
+                            zipStatus +
+                            ". Typ odpowiedzi: " +
+                            mediaType +
+                            ". Adres końcowy: " +
+                            responseUri);
+                    }
+
+                    currentUri =
+                        recoveryUri;
+
+                    CatalogStatusText.Text =
+                        "Repo zwróciło stronę pośrednią. Próba pobrania właściwego ZIP...";
                 }
 
-                string zipStatus =
-                    CheckZip(tempFile);
-
-                if (zipStatus != "OK")
+                if (string.IsNullOrWhiteSpace(validTempFile) ||
+                    string.IsNullOrWhiteSpace(finalFileName))
                 {
                     throw new InvalidDataException(
-                        "Pobrany plik nie jest poprawnym archiwum ZIP.");
+                        "Nie udało się pobrać poprawnego archiwum ZIP.");
                 }
 
                 string modType =
-                    DetectModType(tempFile);
+                    DetectModType(validTempFile);
 
                 CompatibilityResult compatibility =
                     CheckCompatibility(
-                        tempFile,
-                        zipStatus,
+                        validTempFile,
+                        "OK",
                         modType);
 
                 if (compatibility.Status ==
@@ -2712,7 +2795,7 @@ namespace BeamNGModManager
                 string destination =
                     Path.Combine(
                         modsFolder!,
-                        SanitizeFileName(fileName));
+                        SanitizeFileName(finalFileName));
 
                 if (File.Exists(destination))
                 {
@@ -2733,23 +2816,109 @@ namespace BeamNGModManager
                 }
 
                 File.Copy(
-                    tempFile,
+                    validTempFile,
                     destination,
                     true);
             }
             finally
             {
-                try
+                if (!string.IsNullOrWhiteSpace(validTempFile))
                 {
-                    if (File.Exists(tempFile))
+                    try
                     {
-                        File.Delete(tempFile);
+                        if (File.Exists(validTempFile))
+                        {
+                            File.Delete(validTempFile);
+                        }
+                    }
+                    catch
+                    {
                     }
                 }
-                catch
+            }
+        }
+
+        private Uri? TryExtractDownloadUriFromSavedPayload(
+            string file,
+            Uri baseUri,
+            string source)
+        {
+            try
+            {
+                FileInfo info =
+                    new FileInfo(file);
+
+                if (!info.Exists ||
+                    info.Length == 0 ||
+                    info.Length > 8L * 1024 * 1024)
                 {
+                    return null;
+                }
+
+                byte[] bytes =
+                    File.ReadAllBytes(file);
+
+                string text =
+                    Encoding.UTF8.GetString(bytes);
+
+                if (string.IsNullOrWhiteSpace(text))
+                {
+                    return null;
+                }
+
+                Uri? normal =
+                    ExtractDownloadUriFromPage(
+                        text,
+                        baseUri,
+                        source);
+
+                if (normal != null)
+                {
+                    return normal;
+                }
+
+                string[] patterns =
+                {
+                    "<meta[^>]+http-equiv=[\\\"']refresh[\\\"'][^>]+content=[\\\"'][^;]+;\\s*url=(?<url>[^\\\"']+)[\\\"']",
+                    "(?:window\\.)?location(?:\\.href)?\\s*=\\s*[\\\"'](?<url>[^\\\"']+)[\\\"']",
+                    "[\\\"'](?:downloadUrl|download_url|url)[\\\"']\\s*:\\s*[\\\"'](?<url>[^\\\"']+)[\\\"']"
+                };
+
+                foreach (string pattern in patterns)
+                {
+                    Match match =
+                        Regex.Match(
+                            text,
+                            pattern,
+                            RegexOptions.IgnoreCase |
+                            RegexOptions.Singleline);
+
+                    if (!match.Success)
+                    {
+                        continue;
+                    }
+
+                    string value =
+                        WebUtility.HtmlDecode(
+                            match.Groups["url"].Value);
+
+                    try
+                    {
+                        return new Uri(
+                            MakeAbsoluteUrl(
+                                value,
+                                baseUri));
+                    }
+                    catch
+                    {
+                    }
                 }
             }
+            catch
+            {
+            }
+
+            return null;
         }
 
         private async Task<HttpResponseMessage> GetDownloadResponseAsync(
