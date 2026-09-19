@@ -172,6 +172,45 @@
                     Value="Center"/>
         </Style>
 
+        <Style TargetType="Thumb">
+            <Setter Property="Background"
+                    Value="#5A6474"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Border Background="{TemplateBinding Background}"
+                                CornerRadius="5"/>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style TargetType="ScrollBar">
+            <Setter Property="Background"
+                    Value="#171A21"/>
+            <Setter Property="Foreground"
+                    Value="#5A6474"/>
+            <Setter Property="Opacity"
+                    Value="0.95"/>
+            <Style.Triggers>
+                <Trigger Property="Orientation"
+                         Value="Horizontal">
+                    <Setter Property="Height"
+                            Value="11"/>
+                    <Setter Property="Margin"
+                            Value="4,2,4,4"/>
+                </Trigger>
+
+                <Trigger Property="Orientation"
+                         Value="Vertical">
+                    <Setter Property="Width"
+                            Value="11"/>
+                    <Setter Property="Margin"
+                            Value="2,4,4,4"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+
     </Window.Resources>
 
     <Grid>
@@ -239,7 +278,7 @@
                             Background="{StaticResource AccentSoftBrush}"/>
 
                     <Button x:Name="ScanModsButton"
-                            Content="Skanuj mody"
+                            Content="Odśwież bibliotekę"
                             Style="{StaticResource SidebarButtonStyle}"
                             IsEnabled="False"
                             Click="ScanModsButton_Click"/>
@@ -368,9 +407,8 @@
                     Padding="1">
 
                 <DataGrid x:Name="ModsGrid"
-                          FrozenColumnCount="1"
                           HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Visible"
                           CanUserResizeColumns="True">
 
                     <DataGrid.Columns>
