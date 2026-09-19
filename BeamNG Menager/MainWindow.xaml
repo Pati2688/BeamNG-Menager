@@ -557,7 +557,6 @@
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
                 <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
                 <RowDefinition Height="*"/>
             </Grid.RowDefinitions>
 
@@ -570,11 +569,11 @@
                 </Grid.ColumnDefinitions>
 
                 <StackPanel>
-                    <TextBlock Text="Pobieranie modów"
+                    <TextBlock Text="Repo BeamNG"
                                FontSize="27"
                                FontWeight="Bold"/>
 
-                    <TextBlock Text="Wybierz mod z katalogu i pobierz go bezpośrednio przez menedżer."
+                    <TextBlock Text="24 najnowsze mody — układ 6 × 4"
                                Foreground="{StaticResource TextMutedBrush}"
                                FontSize="13"
                                Margin="0,4,0,0"/>
@@ -582,62 +581,15 @@
 
                 <Button x:Name="RefreshCatalogButton"
                         Grid.Column="1"
-                        Content="Odśwież katalog"
+                        Content="Odśwież"
                         Style="{StaticResource PrimaryButtonStyle}"
-                        Width="160"
+                        Width="140"
                         Margin="10,0,0,0"
                         Click="RefreshCatalogButton_Click"/>
 
             </Grid>
 
             <Border Grid.Row="1"
-                    Background="{StaticResource PanelBrush}"
-                    BorderBrush="{StaticResource BorderBrushSoft}"
-                    BorderThickness="1"
-                    CornerRadius="10"
-                    Padding="14,10"
-                    Margin="0,0,0,10">
-
-                <StackPanel Orientation="Horizontal"
-                            VerticalAlignment="Center">
-
-                    <TextBlock Text="Źródła:"
-                               FontWeight="SemiBold"
-                               VerticalAlignment="Center"
-                               Margin="0,0,14,0"/>
-
-                    <CheckBox x:Name="AllSourcesCheckBox"
-                              Content="Wszystkie"
-                              IsChecked="True"
-                              VerticalAlignment="Center"
-                              Margin="0,0,16,0"
-                              Click="AllSourcesCheckBox_Click"/>
-
-                    <CheckBox x:Name="RepoSourceCheckBox"
-                              Content="Repo BeamNG"
-                              IsChecked="True"
-                              VerticalAlignment="Center"
-                              Margin="0,0,16,0"
-                              Click="SourceFilterCheckBox_Click"/>
-
-                    <CheckBox x:Name="ModLandSourceCheckBox"
-                              Content="ModLand"
-                              IsChecked="True"
-                              VerticalAlignment="Center"
-                              Margin="0,0,16,0"
-                              Click="SourceFilterCheckBox_Click"/>
-
-                    <CheckBox x:Name="ModDbSourceCheckBox"
-                              Content="ModDB"
-                              IsChecked="True"
-                              VerticalAlignment="Center"
-                              Click="SourceFilterCheckBox_Click"/>
-
-                </StackPanel>
-
-            </Border>
-
-            <Border Grid.Row="2"
                     Background="{StaticResource PanelBrush}"
                     BorderBrush="{StaticResource BorderBrushSoft}"
                     BorderThickness="1"
@@ -652,61 +604,96 @@
 
             </Border>
 
-            <Border Grid.Row="3"
+            <Border Grid.Row="2"
                     Background="{StaticResource PanelBrush}"
                     BorderBrush="{StaticResource BorderBrushSoft}"
                     BorderThickness="1"
                     CornerRadius="12"
-                    Padding="1">
+                    Padding="10">
 
-                <DataGrid x:Name="CatalogGrid"
-                          HorizontalScrollBarVisibility="Auto"
-                          VerticalScrollBarVisibility="Visible"
-                          CanUserResizeColumns="True">
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
 
-                    <DataGrid.Columns>
+                    <ItemsControl x:Name="CatalogTiles">
 
-                        <DataGridTextColumn Header="Mod"
-                                            Binding="{Binding Title}"
-                                            Width="2.0*"
-                                            MinWidth="240"/>
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <UniformGrid Columns="6"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
 
-                        <DataGridTextColumn Header="Źródło"
-                                            Binding="{Binding Source}"
-                                            Width="0.9*"
-                                            MinWidth="110"/>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
 
-                        <DataGridTextColumn Header="Autor"
-                                            Binding="{Binding Author}"
-                                            Width="1.0*"
-                                            MinWidth="120"/>
+                                <Border Background="#1C2028"
+                                        BorderBrush="#303641"
+                                        BorderThickness="1"
+                                        CornerRadius="10"
+                                        Margin="6"
+                                        Padding="8">
 
-                        <DataGridTextColumn Header="Kategoria"
-                                            Binding="{Binding Category}"
-                                            Width="1.0*"
-                                            MinWidth="120"/>
+                                    <Grid>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
 
-                        <DataGridTextColumn Header="Opis"
-                                            Binding="{Binding Description}"
-                                            Width="2.2*"
-                                            MinWidth="260"/>
+                                        <Border Grid.Row="0"
+                                                Height="105"
+                                                Background="#242A35"
+                                                CornerRadius="8"
+                                                ClipToBounds="True">
 
-                        <DataGridTemplateColumn Header=""
-                                                Width="125">
-                            <DataGridTemplateColumn.CellTemplate>
-                                <DataTemplate>
-                                    <Button Content="Pobierz"
-                                            Style="{StaticResource PrimaryButtonStyle}"
-                                            Margin="4"
-                                            Padding="12,7"
-                                            Click="DownloadCatalogItem_Click"/>
-                                </DataTemplate>
-                            </DataGridTemplateColumn.CellTemplate>
-                        </DataGridTemplateColumn>
+                                            <Grid>
+                                                <TextBlock Text="MOD"
+                                                           Foreground="#4C5563"
+                                                           FontSize="24"
+                                                           FontWeight="Bold"
+                                                           HorizontalAlignment="Center"
+                                                           VerticalAlignment="Center"/>
 
-                    </DataGrid.Columns>
+                                                <Image Source="{Binding ThumbnailUrl}"
+                                                       Stretch="UniformToFill"/>
+                                            </Grid>
 
-                </DataGrid>
+                                        </Border>
+
+                                        <StackPanel Grid.Row="1"
+                                                    Margin="2,8,2,6">
+
+                                            <TextBlock Text="{Binding Title}"
+                                                       Foreground="#F2F4F8"
+                                                       FontWeight="SemiBold"
+                                                       FontSize="13"
+                                                       TextWrapping="Wrap"
+                                                       MaxHeight="38"/>
+
+                                            <TextBlock Text="{Binding Author}"
+                                                       Foreground="{StaticResource TextMutedBrush}"
+                                                       FontSize="11"
+                                                       Margin="0,3,0,0"
+                                                       TextTrimming="CharacterEllipsis"/>
+
+                                        </StackPanel>
+
+                                        <Button Grid.Row="2"
+                                                Content="Pobierz"
+                                                Style="{StaticResource PrimaryButtonStyle}"
+                                                Margin="0"
+                                                Padding="10,7"
+                                                Click="DownloadCatalogItem_Click"/>
+
+                                    </Grid>
+
+                                </Border>
+
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+
+                    </ItemsControl>
+
+                </ScrollViewer>
 
             </Border>
 
