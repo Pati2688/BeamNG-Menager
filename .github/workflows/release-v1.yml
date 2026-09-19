@@ -1,0 +1,80 @@
+name: Release v1.0.0
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - ".github/workflows/release-v1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "10.0.x"
+
+      - name: Publish Windows x64
+        shell: pwsh
+        run: |
+          dotnet restore "BeamNG Menager/BeamNG Menager.csproj"
+          dotnet publish "BeamNG Menager/BeamNG Menager.csproj" `
+            -c Release `
+            -r win-x64 `
+            --self-contained true `
+            -p:PublishSingleFile=true `
+            -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:DebugType=None `
+            -p:DebugSymbols=false `
+            -o publish
+
+      - name: Create ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "publish\*" -DestinationPath "Mods-Manager-BeamNG-v1.0.0-win-x64.zip" -Force
+
+      - name: Create GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view "v1.0.0" --repo "${{ github.repository }}" *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release v1.0.0 already exists."
+            exit 0
+          }
+
+          @"
+          Mods Manager BeamNG v1.0.0
+
+          Pierwsze wydanie aplikacji.
+
+          Najważniejsze funkcje:
+          - wykrywanie BeamNG.drive i folderu modów,
+          - skanowanie biblioteki ZIP,
+          - analiza zgodności i kolizji,
+          - przeglądanie oficjalnego Repo BeamNG,
+          - pobieranie i instalowanie modów,
+          - sprawdzanie aktualizacji modów z Repo BeamNG,
+          - interfejs polski i angielski.
+
+          Platforma: Windows x64.
+          "@ | Set-Content -Path "release-notes.txt" -Encoding utf8
+
+          gh release create "v1.0.0" `
+            "Mods-Manager-BeamNG-v1.0.0-win-x64.zip" `
+            --repo "${{ github.repository }}" `
+            --target "${{ github.sha }}" `
+            --title "Mods Manager BeamNG v1.0.0" `
+            --notes-file "release-notes.txt" `
+            --latest
