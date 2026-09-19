@@ -1406,6 +1406,7 @@ namespace BeamNGModManager
 
             RefreshCatalogButton.IsEnabled = false;
             DownloadModsButton.IsEnabled = false;
+            CatalogSortComboBox.IsEnabled = false;
             isCatalogPageLoading = true;
             hasMoreCatalogPages = true;
             currentCatalogPage = 0;
@@ -1452,6 +1453,7 @@ namespace BeamNGModManager
                 isCatalogPageLoading = false;
                 RefreshCatalogButton.IsEnabled = true;
                 DownloadModsButton.IsEnabled = true;
+                CatalogSortComboBox.IsEnabled = true;
             }
         }
 
@@ -1464,6 +1466,7 @@ namespace BeamNGModManager
             }
 
             isCatalogPageLoading = true;
+            CatalogSortComboBox.IsEnabled = false;
 
             int nextPage =
                 currentCatalogPage + 1;
@@ -1534,6 +1537,7 @@ namespace BeamNGModManager
             finally
             {
                 isCatalogPageLoading = false;
+                CatalogSortComboBox.IsEnabled = true;
             }
         }
 
