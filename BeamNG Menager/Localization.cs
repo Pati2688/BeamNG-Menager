@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Data;
 
 namespace BeamNGModManager
 {
@@ -333,12 +334,18 @@ namespace BeamNGModManager
             foreach (object child in LogicalTreeHelper.GetChildren(parent))
             {
                 if (child is TextBlock textBlock &&
+                    !BindingOperations.IsDataBound(
+                        textBlock,
+                        TextBlock.TextProperty) &&
                     !string.IsNullOrWhiteSpace(textBlock.Text))
                 {
                     textBlock.Text =
                         Localization.TranslateUiLiteral(textBlock.Text);
                 }
                 else if (child is Button button &&
+                         !BindingOperations.IsDataBound(
+                             button,
+                             ContentControl.ContentProperty) &&
                          button.Content is string buttonText)
                 {
                     button.Content =
