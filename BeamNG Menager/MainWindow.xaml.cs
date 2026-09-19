@@ -995,80 +995,6 @@ namespace BeamNGModManager
             }
         }
 
-        private void AllSourcesCheckBox_Click(
-            object sender,
-            RoutedEventArgs e)
-        {
-            bool enabled =
-                AllSourcesCheckBox.IsChecked == true;
-
-            RepoSourceCheckBox.IsChecked =
-                enabled;
-
-            ModLandSourceCheckBox.IsChecked =
-                enabled;
-
-            ModDbSourceCheckBox.IsChecked =
-                enabled;
-
-            ApplyCatalogFilter();
-        }
-
-        private void SourceFilterCheckBox_Click(
-            object sender,
-            RoutedEventArgs e)
-        {
-            AllSourcesCheckBox.IsChecked =
-                RepoSourceCheckBox.IsChecked == true &&
-                ModLandSourceCheckBox.IsChecked == true &&
-                ModDbSourceCheckBox.IsChecked == true;
-
-            ApplyCatalogFilter();
-        }
-
-        private void ApplyCatalogFilter()
-        {
-            bool repoEnabled =
-                RepoSourceCheckBox.IsChecked == true;
-
-            bool modLandEnabled =
-                ModLandSourceCheckBox.IsChecked == true;
-
-            bool modDbEnabled =
-                ModDbSourceCheckBox.IsChecked == true;
-
-            catalogMods =
-                allCatalogMods
-                    .Where(mod =>
-                        (repoEnabled &&
-                         mod.Source == "Repo BeamNG") ||
-                        (modLandEnabled &&
-                         mod.Source == "ModLand") ||
-                        (modDbEnabled &&
-                         mod.Source == "ModDB"))
-                    .OrderBy(mod =>
-                        mod.Source == "Repo BeamNG"
-                            ? 0
-                            : mod.Source == "ModLand"
-                                ? 1
-                                : 2)
-                    .ThenBy(mod => mod.Title)
-                    .ToList();
-
-            CatalogGrid.ItemsSource = null;
-            CatalogGrid.ItemsSource = catalogMods;
-
-            if (allCatalogMods.Count > 0)
-            {
-                CatalogStatusText.Text =
-                    "Wyświetlane: " +
-                    catalogMods.Count +
-                    " z " +
-                    allCatalogMods.Count +
-                    " modów.";
-            }
-        }
-
         private async void RefreshCatalogButton_Click(
             object sender,
             RoutedEventArgs e)
@@ -1082,67 +1008,25 @@ namespace BeamNGModManager
             DownloadModsButton.IsEnabled = false;
 
             CatalogStatusText.Text =
-                "Pobieranie list modów z Repo BeamNG, ModLand i ModDB...";
+                "Pobieranie najnowszych modów z Repo BeamNG...";
 
             try
             {
-                Task<List<CatalogMod>> beamNgTask =
-                    SafeLoadCatalogAsync(
-                        LoadBeamNgCatalogAsync);
+                catalogMods =
+                    await LoadBeamNgCatalogAsync();
 
-                Task<List<CatalogMod>> modLandTask =
-                    SafeLoadCatalogAsync(
-                        LoadModLandCatalogAsync);
-
-                Task<List<CatalogMod>> modDbTask =
-                    SafeLoadCatalogAsync(
-                        LoadModDbCatalogAsync);
-
-                List<CatalogMod>[] results =
-                    await Task.WhenAll(
-                        beamNgTask,
-                        modLandTask,
-                        modDbTask);
-
-                allCatalogMods =
-                    results
-                        .SelectMany(list => list)
-                        .GroupBy(
-                            mod => mod.ResourceUrl,
-                            StringComparer.OrdinalIgnoreCase)
-                        .Select(group => group.First())
-                        .ToList();
-
-                int repoCount =
-                    allCatalogMods.Count(mod =>
-                        mod.Source == "Repo BeamNG");
-
-                int modLandCount =
-                    allCatalogMods.Count(mod =>
-                        mod.Source == "ModLand");
-
-                int modDbCount =
-                    allCatalogMods.Count(mod =>
-                        mod.Source == "ModDB");
-
-                ApplyCatalogFilter();
+                CatalogTiles.ItemsSource = null;
+                CatalogTiles.ItemsSource = catalogMods;
 
                 CatalogStatusText.Text =
                     "Gotowe: " +
-                    allCatalogMods.Count +
-                    " modów | Repo BeamNG: " +
-                    repoCount +
-                    " | ModLand: " +
-                    modLandCount +
-                    " | ModDB: " +
-                    modDbCount +
-                    " | Wyświetlane: " +
-                    catalogMods.Count;
+                    catalogMods.Count +
+                    " modów z Repo BeamNG.";
             }
             catch (Exception ex)
             {
                 CatalogStatusText.Text =
-                    "Nie udało się wczytać katalogu: " +
+                    "Nie udało się wczytać Repo BeamNG: " +
                     ex.Message;
             }
             finally
@@ -1253,10 +1137,14 @@ namespace BeamNGModManager
                                 html,
                                 match.Index +
                                 match.Length),
+                        ThumbnailUrl =
+                            ExtractThumbnailUrl(
+                                nearby,
+                                new Uri(pageUrl)),
                         ResourceUrl = absoluteUrl
                     });
 
-                if (result.Count >= 35)
+                if (result.Count >= 24)
                 {
                     break;
                 }
@@ -1423,6 +1311,57 @@ namespace BeamNGModManager
             }
 
             return result;
+        }
+
+        private string ExtractThumbnailUrl(
+            string html,
+            Uri baseUri)
+        {
+            string[] patterns =
+            {
+                "(?:data-src|data-url|src)=[\\\"'](?<url>[^\\\"']*(?:resource|attachment|proxy)[^\\\"']*\\.(?:jpg|jpeg|png|webp)(?:\\?[^\\\"']*)?)[\\\"']",
+                "(?:data-src|data-url|src)=[\\\"'](?<url>[^\\\"']+\\.(?:jpg|jpeg|png|webp)(?:\\?[^\\\"']*)?)[\\\"']"
+            };
+
+            foreach (string pattern in patterns)
+            {
+                Match match =
+                    Regex.Match(
+                        html,
+                        pattern,
+                        RegexOptions.IgnoreCase);
+
+                if (!match.Success)
+                {
+                    continue;
+                }
+
+                string value =
+                    WebUtility.HtmlDecode(
+                        match.Groups["url"].Value);
+
+                if (value.StartsWith(
+                    "data:",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (Uri.TryCreate(
+                    value,
+                    UriKind.Absolute,
+                    out Uri? absoluteUri))
+                {
+                    return absoluteUri.ToString();
+                }
+
+                return new Uri(
+                    baseUri,
+                    value)
+                    .ToString();
+            }
+
+            return "";
         }
 
         private string GetNearbyHtml(
@@ -2619,6 +2558,7 @@ namespace BeamNGModManager
         public string Author { get; set; } = "";
         public string Category { get; set; } = "";
         public string Description { get; set; } = "";
+        public string ThumbnailUrl { get; set; } = "";
         public string ResourceUrl { get; set; } = "";
     }
 
