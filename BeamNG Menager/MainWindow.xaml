@@ -733,25 +733,36 @@
                         CornerRadius="12"
                         Padding="18">
 
-                    <ScrollViewer VerticalScrollBarVisibility="Auto"
-                                  HorizontalScrollBarVisibility="Disabled">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
 
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
+                        <Border Grid.Row="0"
+                                Background="{StaticResource PanelBrush}"
+                                Padding="0,0,0,10">
 
-                            <Button Grid.Row="0"
-                                    Content="← Wróć do katalogu"
+                            <Button Content="← Wróć do katalogu"
                                     Style="{StaticResource SidebarButtonStyle}"
                                     HorizontalAlignment="Left"
-                                    Margin="0,0,0,14"
+                                    Margin="0"
                                     Click="CatalogDetailBackButton_Click"/>
 
-                            <Grid Grid.Row="1">
+                        </Border>
+
+                        <ScrollViewer Grid.Row="1"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="Auto"/>
+                                </Grid.RowDefinitions>
+
+                                <Grid Grid.Row="0">
 
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="1.55*"/>
@@ -901,8 +912,8 @@
 
                             </Grid>
 
-                            <Border Grid.Row="2"
-                                    Background="#1D212A"
+                                <Border Grid.Row="1"
+                                        Background="#1D212A"
                                     BorderBrush="#303641"
                                     BorderThickness="1"
                                     CornerRadius="10"
@@ -924,8 +935,8 @@
 
                             </Border>
 
-                            <StackPanel Grid.Row="3"
-                                        Margin="0,20,0,0">
+                                <StackPanel Grid.Row="2"
+                                            Margin="0,20,0,0">
 
                                 <TextBlock Text="Galeria"
                                            FontSize="20"
@@ -960,9 +971,11 @@
 
                             </StackPanel>
 
-                        </Grid>
+                            </Grid>
 
-                    </ScrollViewer>
+                        </ScrollViewer>
+
+                    </Grid>
 
                 </Border>
             </Grid>
