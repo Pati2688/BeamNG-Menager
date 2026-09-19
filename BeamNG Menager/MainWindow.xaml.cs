@@ -24,6 +24,11 @@ namespace BeamNGModManager
         public MainWindow()
         {
             InitializeComponent();
+
+            // BeamNG jest wykrywany automatycznie przy uruchomieniu programu.
+            // Przycisk w panelu służy później tylko do ręcznego ponownego sprawdzenia.
+            Loaded += (_, _) =>
+                DetectButton_Click(this, new RoutedEventArgs());
         }
 
         private static HttpClient CreateHttpClient()
@@ -149,6 +154,9 @@ namespace BeamNGModManager
             ScanModsButton.IsEnabled = true;
             InstallModButton.IsEnabled = true;
             CheckUpdatesButton.IsEnabled = true;
+
+            // Po poprawnym wykryciu gry od razu ładujemy bibliotekę.
+            ScanMods();
         }
 
         private string? DetectGameVersionFromExecutable()
@@ -226,7 +234,7 @@ namespace BeamNGModManager
                 !Directory.Exists(modsFolder))
             {
                 StatusText.Text =
-                    "Najpierw kliknij „Wykryj BeamNG”.";
+                    "Nie wykryto BeamNG. Użyj „Sprawdź BeamNG” w sekcji Narzędzia.";
 
                 return;
             }
@@ -280,6 +288,9 @@ namespace BeamNGModManager
                     Name =
                         Path.GetFileNameWithoutExtension(file),
 
+                    FilePath =
+                        file,
+
                     Source =
                         source,
 
@@ -321,6 +332,8 @@ namespace BeamNGModManager
                 });
             }
 
+            AnalyzeConflicts(mods);
+
             currentMods =
                 mods
                     .OrderBy(x => x.Name)
@@ -333,6 +346,216 @@ namespace BeamNGModManager
                 gameVersion +
                 " | Znaleziono modów: " +
                 currentMods.Count;
+        }
+
+        private void AnalyzeConflicts(List<ModInfo> mods)
+        {
+            Dictionary<string, List<ModInfo>> ownersByPath =
+                new Dictionary<string, List<ModInfo>>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            Dictionary<ModInfo, int> conflictCounts =
+                mods.ToDictionary(
+                    mod => mod,
+                    mod => 0);
+
+            Dictionary<ModInfo, HashSet<string>> conflictingMods =
+                mods.ToDictionary(
+                    mod => mod,
+                    mod => new HashSet<string>(
+                        StringComparer.OrdinalIgnoreCase));
+
+            foreach (ModInfo mod in mods)
+            {
+                mod.ConflictStatus = "Brak";
+                mod.ConflictDetails =
+                    "Nie wykryto plików nadpisywanych przez inne mody.";
+                mod.ConflictColor = "#237A4B";
+
+                if (string.IsNullOrWhiteSpace(mod.FilePath) ||
+                    !File.Exists(mod.FilePath))
+                {
+                    continue;
+                }
+
+                foreach (string path in GetConflictRelevantPaths(mod.FilePath))
+                {
+                    if (!ownersByPath.TryGetValue(
+                        path,
+                        out List<ModInfo>? owners))
+                    {
+                        owners = new List<ModInfo>();
+                        ownersByPath[path] = owners;
+                    }
+
+                    owners.Add(mod);
+                }
+            }
+
+            foreach (KeyValuePair<string, List<ModInfo>> item in ownersByPath)
+            {
+                List<ModInfo> owners =
+                    item.Value
+                        .Distinct()
+                        .ToList();
+
+                if (owners.Count < 2)
+                {
+                    continue;
+                }
+
+                foreach (ModInfo mod in owners)
+                {
+                    conflictCounts[mod]++;
+
+                    foreach (ModInfo other in owners)
+                    {
+                        if (!ReferenceEquals(mod, other))
+                        {
+                            conflictingMods[mod].Add(other.Name);
+                        }
+                    }
+                }
+            }
+
+            foreach (ModInfo mod in mods)
+            {
+                int sharedFiles =
+                    conflictCounts[mod];
+
+                int otherMods =
+                    conflictingMods[mod].Count;
+
+                if (sharedFiles == 0)
+                {
+                    continue;
+                }
+
+                mod.ConflictStatus =
+                    sharedFiles +
+                    " plików / " +
+                    otherMods +
+                    " modów";
+
+                List<string> names =
+                    conflictingMods[mod]
+                        .OrderBy(name => name)
+                        .Take(5)
+                        .ToList();
+
+                string details =
+                    "Wspólne pliki z: " +
+                    string.Join(", ", names);
+
+                if (otherMods > names.Count)
+                {
+                    details +=
+                        " i " +
+                        (otherMods - names.Count) +
+                        " innymi.";
+                }
+                else
+                {
+                    details += ".";
+                }
+
+                mod.ConflictDetails = details;
+
+                mod.ConflictColor =
+                    sharedFiles >= 10
+                        ? "#A53A43"
+                        : "#B85C1E";
+            }
+        }
+
+        private HashSet<string> GetConflictRelevantPaths(
+            string file)
+        {
+            HashSet<string> paths =
+                new HashSet<string>(
+                    StringComparer.OrdinalIgnoreCase);
+
+            try
+            {
+                using ZipArchive archive =
+                    ZipFile.OpenRead(file);
+
+                foreach (ZipArchiveEntry entry in archive.Entries)
+                {
+                    if (string.IsNullOrEmpty(entry.Name))
+                    {
+                        continue;
+                    }
+
+                    string? path =
+                        NormalizeConflictPath(
+                            entry.FullName);
+
+                    if (!string.IsNullOrWhiteSpace(path))
+                    {
+                        paths.Add(path);
+                    }
+                }
+            }
+            catch
+            {
+            }
+
+            return paths;
+        }
+
+        private string? NormalizeConflictPath(
+            string rawPath)
+        {
+            string path =
+                rawPath
+                    .Replace('\\', '/')
+                    .TrimStart('/')
+                    .ToLowerInvariant();
+
+            string[] roots =
+            {
+                "vehicles/",
+                "levels/",
+                "art/",
+                "lua/",
+                "scripts/",
+                "ui/",
+                "gameplay/",
+                "settings/",
+                "missions/"
+            };
+
+            int bestIndex = -1;
+
+            foreach (string root in roots)
+            {
+                int index =
+                    path.IndexOf(
+                        root,
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (index >= 0 &&
+                    (bestIndex < 0 || index < bestIndex))
+                {
+                    bestIndex = index;
+                }
+            }
+
+            if (bestIndex < 0)
+            {
+                return null;
+            }
+
+            string normalized =
+                path.Substring(bestIndex);
+
+            if (normalized.EndsWith("/"))
+            {
+                return null;
+            }
+
+            return normalized;
         }
 
         private void RefreshGrid()
@@ -1282,6 +1505,7 @@ namespace BeamNGModManager
     public class ModInfo
     {
         public string Name { get; set; } = "";
+        public string FilePath { get; set; } = "";
         public string Source { get; set; } = "";
         public string Type { get; set; } = "";
         public string ModVersion { get; set; } = "";
@@ -1292,6 +1516,9 @@ namespace BeamNGModManager
         public string Size { get; set; } = "";
         public string Modified { get; set; } = "";
         public string Status { get; set; } = "";
+        public string ConflictStatus { get; set; } = "Brak";
+        public string ConflictDetails { get; set; } = "";
+        public string ConflictColor { get; set; } = "#4C5563";
         public string Compatibility { get; set; } = "";
         public string CompatibilityReason { get; set; } = "";
     }
