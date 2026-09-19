@@ -126,6 +126,7 @@ namespace BeamNGModManager
             ("Nie udało się pobrać poprawnego archiwum ZIP.", "Failed to download a valid ZIP archive."),
             ("Nie znaleziono prawidłowego linku pobierania moda.", "A valid mod download link was not found."),
             ("Strona używa zbyt wielu etapów pobierania.", "The page uses too many download steps."),
+            ("Gotowe:", "Ready:"),
             ("Znaleziono:", "Found:"),
             ("modów dla „", "mods for “"),
             ("modów z Repo BeamNG", "mods from BeamNG Repo"),
@@ -283,7 +284,12 @@ namespace BeamNGModManager
             object sender,
             SelectionChangedEventArgs e)
         {
-            if (isApplyingLanguage ||
+            // SelectedIndex z XAML może wywołać event jeszcze w trakcie
+            // InitializeComponent, zanim powstaną pozostałe kontrolki.
+            if (!IsInitialized ||
+                StatusText == null ||
+                ModsGrid == null ||
+                isApplyingLanguage ||
                 LanguageComboBox?.SelectedItem is not ComboBoxItem selectedItem)
             {
                 return;
