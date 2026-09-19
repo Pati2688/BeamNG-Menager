@@ -2759,16 +2759,48 @@ namespace BeamNGModManager
             Uri currentUri =
                 initialUri;
 
+            Uri? referrerUri =
+                null;
+
             for (int attempt = 0;
-                attempt < 4;
+                attempt < 5;
                 attempt++)
             {
+                using HttpRequestMessage request =
+                    new HttpRequestMessage(
+                        HttpMethod.Get,
+                        currentUri);
+
+                if (referrerUri != null)
+                {
+                    request.Headers.Referrer =
+                        referrerUri;
+                }
+
                 HttpResponseMessage response =
-                    await downloadClient.GetAsync(
-                        currentUri,
+                    await downloadClient.SendAsync(
+                        request,
                         HttpCompletionOption.ResponseHeadersRead);
 
-                response.EnsureSuccessStatusCode();
+                if (!response.IsSuccessStatusCode)
+                {
+                    string failedUrl =
+                        response.RequestMessage?
+                            .RequestUri?
+                            .ToString() ??
+                        currentUri.ToString();
+
+                    int statusCode =
+                        (int)response.StatusCode;
+
+                    response.Dispose();
+
+                    throw new HttpRequestException(
+                        "HTTP " +
+                        statusCode +
+                        " podczas pobierania z Repo BeamNG. Adres: " +
+                        failedUrl);
+                }
 
                 string? mediaType =
                     response.Content.Headers.ContentType?.MediaType;
@@ -2804,11 +2836,14 @@ namespace BeamNGModManager
                 string html =
                     await response.Content.ReadAsStringAsync();
 
+                Uri responseUri =
+                    response.RequestMessage?.RequestUri ??
+                    currentUri;
+
                 Uri? nextUri =
                     ExtractDownloadUriFromPage(
                         html,
-                        response.RequestMessage?.RequestUri ??
-                        currentUri,
+                        responseUri,
                         source);
 
                 response.Dispose();
@@ -2817,8 +2852,11 @@ namespace BeamNGModManager
                     nextUri == currentUri)
                 {
                     throw new InvalidOperationException(
-                        "Nie znaleziono bezpośredniego pliku do pobrania.");
+                        "Nie znaleziono prawidłowego linku pobierania moda.");
                 }
+
+                referrerUri =
+                    responseUri;
 
                 currentUri =
                     nextUri;
@@ -2893,9 +2931,17 @@ namespace BeamNGModManager
                     return absoluteUri;
                 }
 
-                return new Uri(
-                    baseUri,
-                    href);
+                try
+                {
+                    return new Uri(
+                        MakeAbsoluteUrl(
+                            href,
+                            baseUri));
+                }
+                catch
+                {
+                    continue;
+                }
             }
 
             return null;
