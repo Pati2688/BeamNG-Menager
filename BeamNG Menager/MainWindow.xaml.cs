@@ -38,6 +38,7 @@ namespace BeamNGModManager
         public MainWindow()
         {
             InitializeComponent();
+            InitializeLanguage();
 
             // BeamNG jest wykrywany automatycznie przy uruchomieniu programu.
             // Przycisk w panelu służy później tylko do ręcznego ponownego sprawdzenia.
@@ -1135,20 +1136,20 @@ namespace BeamNGModManager
 
                 catalogMod.InstallButtonText =
                     installed
-                        ? "Zainstalowany ✓"
-                        : "Pobierz";
+                        ? Localization.T("Zainstalowany ✓", "Installed ✓")
+                        : Localization.T("Pobierz", "Download");
 
                 catalogMod.InstallDetailButtonText =
                     installed
-                        ? "Zainstalowany ✓"
-                        : "Pobierz i zainstaluj";
+                        ? Localization.T("Zainstalowany ✓", "Installed ✓")
+                        : Localization.T("Pobierz i zainstaluj", "Download and install");
 
                 catalogMod.CanInstall =
                     !installed;
 
                 catalogMod.InstallationStatus =
                     installed
-                        ? "Zainstalowany"
+                        ? Localization.T("Zainstalowany", "Installed")
                         : "";
             }
 
@@ -3085,11 +3086,11 @@ namespace BeamNGModManager
                 mod.IsInstalled = true;
                 mod.CanInstall = false;
                 mod.InstallButtonText =
-                    "Zainstalowany ✓";
+                    Localization.T("Zainstalowany ✓", "Installed ✓");
                 mod.InstallDetailButtonText =
-                    "Zainstalowany ✓";
+                    Localization.T("Zainstalowany ✓", "Installed ✓");
                 mod.InstallationStatus =
-                    "Zainstalowany";
+                    Localization.T("Zainstalowany", "Installed");
 
                 ApplyCatalogSearch();
 
@@ -4354,6 +4355,15 @@ namespace BeamNGModManager
         public string ConflictColor { get; set; } = "#4C5563";
         public string Compatibility { get; set; } = "";
         public string CompatibilityReason { get; set; } = "";
+
+        public string DisplaySource => Localization.TranslateValue(Source);
+        public string DisplayType => Localization.TranslateValue(Type);
+        public string DisplayUpdateStatus => Localization.TranslateValue(UpdateStatus);
+        public string DisplayStatus => Localization.TranslateValue(Status);
+        public string DisplayConflictStatus => Localization.TranslateValue(ConflictStatus);
+        public string DisplayConflictDetails => Localization.TranslateValue(ConflictDetails);
+        public string DisplayCompatibility => Localization.TranslateValue(Compatibility);
+        public string DisplayCompatibilityReason => Localization.TranslateValue(CompatibilityReason);
     }
 
     public class CatalogMod
