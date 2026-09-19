@@ -1100,6 +1100,11 @@ namespace BeamNGModManager
                         ? "Zainstalowany ✓"
                         : "Pobierz";
 
+                catalogMod.InstallDetailButtonText =
+                    installed
+                        ? "Zainstalowany ✓"
+                        : "Pobierz i zainstaluj";
+
                 catalogMod.CanInstall =
                     !installed;
 
@@ -2690,7 +2695,9 @@ namespace BeamNGModManager
                 return;
             }
 
-            button.IsEnabled = false;
+            button.SetCurrentValue(
+                System.Windows.UIElement.IsEnabledProperty,
+                false);
 
             try
             {
@@ -2702,11 +2709,31 @@ namespace BeamNGModManager
                 await DownloadAndInstallCatalogModAsync(
                     mod);
 
+                ScanMods();
+
+                // Oznaczamy także bezpośrednio kliknięty kafelek.
+                // Dzięki temu stan zmienia się od razu nawet wtedy,
+                // gdy dany ZIP ma nietypowe lub niepełne metadane Repo.
+                mod.IsInstalled = true;
+                mod.CanInstall = false;
+                mod.InstallButtonText =
+                    "Zainstalowany ✓";
+                mod.InstallDetailButtonText =
+                    "Zainstalowany ✓";
+                mod.InstallationStatus =
+                    "Zainstalowany";
+
+                ApplyCatalogSearch();
+
+                if (CatalogDetailView.DataContext == mod)
+                {
+                    CatalogDetailView.DataContext = null;
+                    CatalogDetailView.DataContext = mod;
+                }
+
                 CatalogStatusText.Text =
                     "Zainstalowano: " +
                     mod.Title;
-
-                ScanMods();
             }
             catch (Exception ex)
             {
@@ -2718,7 +2745,9 @@ namespace BeamNGModManager
             }
             finally
             {
-                button.IsEnabled = true;
+                button.SetCurrentValue(
+                    System.Windows.UIElement.IsEnabledProperty,
+                    mod.CanInstall);
             }
         }
 
@@ -3981,6 +4010,7 @@ namespace BeamNGModManager
         public bool IsInstalled { get; set; }
         public bool CanInstall { get; set; } = true;
         public string InstallButtonText { get; set; } = "Pobierz";
+        public string InstallDetailButtonText { get; set; } = "Pobierz i zainstaluj";
         public string InstallationStatus { get; set; } = "";
         public bool DetailsLoaded { get; set; }
     }
