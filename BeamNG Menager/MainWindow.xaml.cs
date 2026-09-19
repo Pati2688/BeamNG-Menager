@@ -1948,12 +1948,55 @@ namespace BeamNGModManager
             string value,
             Uri baseUri)
         {
+            value =
+                WebUtility.HtmlDecode(value)
+                    .Trim();
+
             if (Uri.TryCreate(
                 value,
                 UriKind.Absolute,
                 out Uri? absoluteUri))
             {
                 return absoluteUri.ToString();
+            }
+
+            if (value.StartsWith(
+                "//",
+                StringComparison.Ordinal))
+            {
+                return baseUri.Scheme +
+                    ":" +
+                    value;
+            }
+
+            if (baseUri.Host.EndsWith(
+                "beamng.com",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                string rootRelative =
+                    value.TrimStart('/');
+
+                string[] rootPrefixes =
+                {
+                    "resources/",
+                    "data/",
+                    "attachments/",
+                    "members/",
+                    "styles/",
+                    "proxy.php",
+                    "misc/"
+                };
+
+                if (rootPrefixes.Any(prefix =>
+                    rootRelative.StartsWith(
+                        prefix,
+                        StringComparison.OrdinalIgnoreCase)))
+                {
+                    return baseUri.GetLeftPart(
+                            UriPartial.Authority) +
+                        "/" +
+                        rootRelative;
+                }
             }
 
             return new Uri(
