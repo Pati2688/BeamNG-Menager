@@ -565,7 +565,8 @@
 
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="300"/>
+                    <ColumnDefinition Width="285"/>
+                    <ColumnDefinition Width="210"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
@@ -601,8 +602,48 @@
 
                 </Border>
 
+                <Border Grid.Column="2"
+                        Height="38"
+                        Background="#171A21"
+                        BorderBrush="{StaticResource BorderBrushSoft}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Center">
+
+                    <ComboBox x:Name="CatalogSortComboBox"
+                              Background="#171A21"
+                              Foreground="#F2F4F8"
+                              BorderThickness="0"
+                              Padding="9,6"
+                              FontSize="13"
+                              SelectedIndex="0"
+                              SelectionChanged="CatalogSortComboBox_SelectionChanged">
+
+                        <ComboBox.Resources>
+                            <Style TargetType="ComboBoxItem">
+                                <Setter Property="Background"
+                                        Value="#1C2028"/>
+                                <Setter Property="Foreground"
+                                        Value="#F2F4F8"/>
+                                <Setter Property="Padding"
+                                        Value="10,7"/>
+                            </Style>
+                        </ComboBox.Resources>
+
+                        <ComboBoxItem Content="Data publikacji — najnowsze"
+                                      Tag="date"/>
+                        <ComboBoxItem Content="Najczęściej pobierane"
+                                      Tag="downloads"/>
+                        <ComboBoxItem Content="Największy rozmiar"
+                                      Tag="size"/>
+
+                    </ComboBox>
+
+                </Border>
+
                 <Button x:Name="RefreshCatalogButton"
-                        Grid.Column="2"
+                        Grid.Column="3"
                         Content="Odśwież"
                         Style="{StaticResource PrimaryButtonStyle}"
                         Width="140"
