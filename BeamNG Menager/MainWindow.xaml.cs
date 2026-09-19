@@ -39,6 +39,9 @@ namespace BeamNGModManager
         {
             InitializeComponent();
 
+            CatalogSortComboBox.SelectionChanged +=
+                CatalogSortComboBox_SelectionChanged;
+
             // BeamNG jest wykrywany automatycznie przy uruchomieniu programu.
             // Przycisk w panelu służy później tylko do ręcznego ponownego sprawdzenia.
             Loaded += (_, _) =>
