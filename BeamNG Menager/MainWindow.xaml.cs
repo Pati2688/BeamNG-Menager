@@ -142,6 +142,7 @@ namespace BeamNGModManager
                 ScanModsButton.IsEnabled = false;
                 InstallModButton.IsEnabled = false;
                 CheckUpdatesButton.IsEnabled = false;
+                DownloadModsButton.IsEnabled = false;
                 return;
             }
 
@@ -156,6 +157,7 @@ namespace BeamNGModManager
             ScanModsButton.IsEnabled = true;
             InstallModButton.IsEnabled = true;
             CheckUpdatesButton.IsEnabled = true;
+            DownloadModsButton.IsEnabled = true;
 
             if (scanModsAfterDetection)
             {
@@ -294,11 +296,13 @@ namespace BeamNGModManager
                 string type =
                     DetectModType(file);
 
-                string source =
-                    DetectSource(file);
-
                 ModMetadata metadata =
                     DetectModMetadata(file);
+
+                string source =
+                    DetectSource(
+                        file,
+                        metadata);
 
                 CompatibilityResult compatibility =
                     CheckCompatibility(
@@ -928,6 +932,37 @@ namespace BeamNGModManager
             return 0;
         }
 
+        private void DownloadModsButton_Click(
+            object sender,
+            RoutedEventArgs e)
+        {
+            if (string.IsNullOrWhiteSpace(modsFolder) ||
+                !Directory.Exists(modsFolder))
+            {
+                MessageBox.Show(
+                    "Nie wykryto folderu modów BeamNG.",
+                    "BeamNG Mod Manager",
+                    MessageBoxButton.OK,
+                    MessageBoxImage.Warning);
+
+                return;
+            }
+
+            DownloadWindow window =
+                new DownloadWindow(modsFolder)
+                {
+                    Owner = this
+                };
+
+            bool? result =
+                window.ShowDialog();
+
+            if (result == true)
+            {
+                ScanMods();
+            }
+        }
+
         private void InstallModButton_Click(
             object sender,
             RoutedEventArgs e)
@@ -1060,13 +1095,16 @@ namespace BeamNGModManager
             }
         }
 
-        private string DetectSource(string file)
+        private string DetectSource(
+            string file,
+            ModMetadata metadata)
         {
             string path =
                 file.Replace('\\', '/')
                     .ToLowerInvariant();
 
-            if (path.Contains("/repo/"))
+            if (path.Contains("/repo/") ||
+                metadata.RepositoryId != "Nie podano")
             {
                 return "Repo BeamNG";
             }
