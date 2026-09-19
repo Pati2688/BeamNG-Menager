@@ -649,14 +649,31 @@
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
 
-                                    <Border Background="#1C2028"
-                                            BorderBrush="#303641"
-                                            BorderThickness="1"
+                                    <Border BorderThickness="1"
                                             CornerRadius="12"
                                             Margin="7"
                                             Padding="9"
                                             Cursor="Hand"
                                             MouseLeftButtonUp="CatalogTile_Click">
+
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Setter Property="Background"
+                                                        Value="#1C2028"/>
+                                                <Setter Property="BorderBrush"
+                                                        Value="#303641"/>
+
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding IsInstalled}"
+                                                                 Value="True">
+                                                        <Setter Property="Background"
+                                                                Value="#18251F"/>
+                                                        <Setter Property="BorderBrush"
+                                                                Value="#2F8A59"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
 
                                         <Grid>
                                             <Grid.RowDefinitions>
@@ -703,10 +720,17 @@
                                                            Margin="0,4,0,0"
                                                            TextTrimming="CharacterEllipsis"/>
 
+                                                <TextBlock Text="{Binding InstallationStatus}"
+                                                           Foreground="#69C68C"
+                                                           FontSize="11"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,4,0,0"/>
+
                                             </StackPanel>
 
                                             <Button Grid.Row="2"
-                                                    Content="Pobierz"
+                                                    Content="{Binding InstallButtonText}"
+                                                    IsEnabled="{Binding CanInstall}"
                                                     Style="{StaticResource PrimaryButtonStyle}"
                                                     Margin="0"
                                                     Padding="10,7"
@@ -900,7 +924,8 @@
                                                    TextWrapping="Wrap"
                                                    Margin="0,3,0,18"/>
 
-                                        <Button Content="Pobierz i zainstaluj"
+                                        <Button Content="{Binding InstallButtonText}"
+                                                IsEnabled="{Binding CanInstall}"
                                                 Style="{StaticResource PrimaryButtonStyle}"
                                                 Margin="0"
                                                 Padding="16,11"
