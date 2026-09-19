@@ -2,176 +2,637 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="BeamNG Mod Manager"
-        Height="760"
-        Width="1400"
-        WindowStartupLocation="CenterScreen">
+        Height="820"
+        Width="1500"
+        MinHeight="720"
+        MinWidth="1250"
+        WindowStartupLocation="CenterScreen"
+        Background="#111318"
+        Foreground="#F2F4F8">
 
-    <Grid Margin="20">
+    <Window.Resources>
 
-        <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+        <SolidColorBrush x:Key="PanelBrush" Color="#181B22"/>
+        <SolidColorBrush x:Key="PanelAltBrush" Color="#20242D"/>
+        <SolidColorBrush x:Key="BorderBrushSoft" Color="#2E3440"/>
+        <SolidColorBrush x:Key="TextMutedBrush" Color="#9DA7B6"/>
+        <SolidColorBrush x:Key="AccentBrush" Color="#7B61FF"/>
+        <SolidColorBrush x:Key="AccentSoftBrush" Color="#2D2852"/>
 
-        <TextBlock Grid.Row="0"
-                   Text="BeamNG Mod Manager"
-                   FontSize="30"
-                   FontWeight="Bold"
-                   HorizontalAlignment="Center"
-                   Margin="0,0,0,20"/>
+        <Style x:Key="SidebarButtonStyle"
+               TargetType="Button">
+            <Setter Property="Foreground"
+                    Value="#E9ECF2"/>
+            <Setter Property="Background"
+                    Value="Transparent"/>
+            <Setter Property="BorderThickness"
+                    Value="0"/>
+            <Setter Property="HorizontalContentAlignment"
+                    Value="Left"/>
+            <Setter Property="Padding"
+                    Value="16,11"/>
+            <Setter Property="Margin"
+                    Value="8,3"/>
+            <Setter Property="FontSize"
+                    Value="14"/>
+            <Setter Property="Cursor"
+                    Value="Hand"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="ButtonBorder"
+                                Background="{TemplateBinding Background}"
+                                CornerRadius="8">
+                            <ContentPresenter Margin="{TemplateBinding Padding}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="Center"/>
+                        </Border>
 
-        <StackPanel Grid.Row="1"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Center">
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver"
+                                     Value="True">
+                                <Setter TargetName="ButtonBorder"
+                                        Property="Background"
+                                        Value="#272C36"/>
+                            </Trigger>
 
-            <Button x:Name="DetectButton"
-                    Content="Wykryj BeamNG"
-                    Width="180"
-                    Height="40"
-                    Margin="5"
-                    Click="DetectButton_Click"/>
+                            <Trigger Property="IsPressed"
+                                     Value="True">
+                                <Setter TargetName="ButtonBorder"
+                                        Property="Background"
+                                        Value="#343A47"/>
+                            </Trigger>
 
-            <Button x:Name="ScanModsButton"
-                    Content="Skanuj mody"
-                    Width="180"
-                    Height="40"
-                    Margin="5"
-                    IsEnabled="False"
-                    Click="ScanModsButton_Click"/>
+                            <Trigger Property="IsEnabled"
+                                     Value="False">
+                                <Setter Property="Opacity"
+                                        Value="0.42"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
 
-            <Button x:Name="InstallModButton"
-                    Content="Zainstaluj mod"
-                    Width="180"
-                    Height="40"
-                    Margin="5"
-                    IsEnabled="False"
-                    Click="InstallModButton_Click"/>
+        <Style x:Key="PrimaryButtonStyle"
+               TargetType="Button"
+               BasedOn="{StaticResource SidebarButtonStyle}">
+            <Setter Property="Background"
+                    Value="{StaticResource AccentBrush}"/>
+            <Setter Property="Foreground"
+                    Value="White"/>
+            <Setter Property="HorizontalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="FontWeight"
+                    Value="SemiBold"/>
+            <Setter Property="Margin"
+                    Value="8,8"/>
+        </Style>
 
-            <Button x:Name="CheckUpdatesButton"
-                    Content="Sprawdź aktualizacje"
-                    Width="180"
-                    Height="40"
-                    Margin="5"
-                    IsEnabled="False"
-                    Click="CheckUpdatesButton_Click"/>
+        <Style TargetType="DataGrid">
+            <Setter Property="Background"
+                    Value="{StaticResource PanelBrush}"/>
+            <Setter Property="Foreground"
+                    Value="#EEF1F6"/>
+            <Setter Property="BorderBrush"
+                    Value="{StaticResource BorderBrushSoft}"/>
+            <Setter Property="BorderThickness"
+                    Value="1"/>
+            <Setter Property="GridLinesVisibility"
+                    Value="Horizontal"/>
+            <Setter Property="HorizontalGridLinesBrush"
+                    Value="#272C35"/>
+            <Setter Property="VerticalGridLinesBrush"
+                    Value="Transparent"/>
+            <Setter Property="RowBackground"
+                    Value="{StaticResource PanelBrush}"/>
+            <Setter Property="AlternatingRowBackground"
+                    Value="#1C2028"/>
+            <Setter Property="HeadersVisibility"
+                    Value="Column"/>
+            <Setter Property="RowHeaderWidth"
+                    Value="0"/>
+            <Setter Property="SelectionMode"
+                    Value="Single"/>
+            <Setter Property="SelectionUnit"
+                    Value="FullRow"/>
+            <Setter Property="CanUserAddRows"
+                    Value="False"/>
+            <Setter Property="AutoGenerateColumns"
+                    Value="False"/>
+            <Setter Property="IsReadOnly"
+                    Value="True"/>
+            <Setter Property="FontSize"
+                    Value="13"/>
+        </Style>
 
-        </StackPanel>
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background"
+                    Value="#20242D"/>
+            <Setter Property="Foreground"
+                    Value="#C9D0DB"/>
+            <Setter Property="BorderBrush"
+                    Value="#2E3440"/>
+            <Setter Property="BorderThickness"
+                    Value="0,0,0,1"/>
+            <Setter Property="Padding"
+                    Value="10,12"/>
+            <Setter Property="FontWeight"
+                    Value="SemiBold"/>
+        </Style>
 
-        <TextBlock x:Name="StatusText"
-                   Grid.Row="2"
-                   Text="Najpierw wykryj BeamNG."
-                   TextAlignment="Center"
-                   TextWrapping="Wrap"
-                   Margin="0,15,0,15"/>
+        <Style TargetType="DataGridRow">
+            <Setter Property="MinHeight"
+                    Value="42"/>
+            <Setter Property="BorderThickness"
+                    Value="0"/>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver"
+                         Value="True">
+                    <Setter Property="Background"
+                            Value="#242933"/>
+                </Trigger>
 
-        <DataGrid x:Name="ModsGrid"
-                  Grid.Row="3"
-                  AutoGenerateColumns="False"
-                  IsReadOnly="True"
-                  CanUserAddRows="False"
-                  SelectionMode="Single">
+                <Trigger Property="IsSelected"
+                         Value="True">
+                    <Setter Property="Background"
+                            Value="#2D2852"/>
+                    <Setter Property="Foreground"
+                            Value="White"/>
+                </Trigger>
+            </Style.Triggers>
+        </Style>
 
-            <DataGrid.Columns>
+        <Style TargetType="DataGridCell">
+            <Setter Property="BorderThickness"
+                    Value="0"/>
+            <Setter Property="Padding"
+                    Value="8,7"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+        </Style>
 
-                <DataGridTextColumn Header="Mod"
-                                    Binding="{Binding Name}"
-                                    Width="*"/>
+    </Window.Resources>
 
-                <DataGridTextColumn Header="Źródło"
-                                    Binding="{Binding Source}"
-                                    Width="145"/>
+    <Grid>
 
-                <DataGridTextColumn Header="Typ"
-                                    Binding="{Binding Type}"
-                                    Width="120"/>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="230"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="350"/>
+        </Grid.ColumnDefinitions>
 
-                <DataGridTextColumn Header="Wersja moda"
-                                    Binding="{Binding ModVersion}"
-                                    Width="120"/>
+        <!-- LEWY PANEL -->
+        <Border Grid.Column="0"
+                Background="#151820"
+                BorderBrush="#2A2F39"
+                BorderThickness="0,0,1,0">
 
-                <DataGridTextColumn Header="Aktualizacje"
-                                    Binding="{Binding UpdateStatus}"
-                                    Width="180"/>
+            <Grid Margin="12">
 
-                <DataGridTextColumn Header="Rozmiar"
-                                    Binding="{Binding Size}"
-                                    Width="95"/>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
 
-                <DataGridTextColumn Header="Plik zmieniony"
-                                    Binding="{Binding Modified}"
-                                    Width="145"/>
+                <StackPanel Grid.Row="0"
+                            Margin="8,12,8,24">
 
-                <DataGridTextColumn Header="Stan pliku"
-                                    Binding="{Binding Status}"
-                                    Width="105"/>
+                    <Border Width="46"
+                            Height="46"
+                            HorizontalAlignment="Left"
+                            CornerRadius="12"
+                            Background="{StaticResource AccentBrush}">
 
-                <DataGridTemplateColumn Header="Zgodność"
-                                        Width="190">
+                        <TextBlock Text="B"
+                                   FontSize="22"
+                                   FontWeight="Bold"
+                                   HorizontalAlignment="Center"
+                                   VerticalAlignment="Center"
+                                   Foreground="White"/>
 
-                    <DataGridTemplateColumn.CellTemplate>
-                        <DataTemplate>
+                    </Border>
 
-                            <Border CornerRadius="5"
-                                    Padding="8,4"
-                                    Margin="3">
+                    <TextBlock Text="BeamNG"
+                               FontSize="23"
+                               FontWeight="Bold"
+                               Margin="0,12,0,0"/>
 
-                                <Border.Style>
-                                    <Style TargetType="Border">
+                    <TextBlock Text="Mod Manager"
+                               FontSize="13"
+                               Foreground="{StaticResource TextMutedBrush}"/>
 
-                                        <Setter Property="Background"
-                                                Value="Gray"/>
+                </StackPanel>
 
-                                        <Style.Triggers>
+                <StackPanel Grid.Row="1">
 
-                                            <DataTrigger Binding="{Binding Compatibility}"
-                                                         Value="Zgodny">
+                    <TextBlock Text="NAWIGACJA"
+                               Foreground="#6F7A8A"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Margin="16,0,0,8"/>
+
+                    <Button Content="Biblioteka modów"
+                            Style="{StaticResource SidebarButtonStyle}"
+                            Background="{StaticResource AccentSoftBrush}"/>
+
+                    <Button x:Name="ScanModsButton"
+                            Content="Skanuj mody"
+                            Style="{StaticResource SidebarButtonStyle}"
+                            IsEnabled="False"
+                            Click="ScanModsButton_Click"/>
+
+                    <Button x:Name="CheckUpdatesButton"
+                            Content="Sprawdź aktualizacje"
+                            Style="{StaticResource SidebarButtonStyle}"
+                            IsEnabled="False"
+                            Click="CheckUpdatesButton_Click"/>
+
+                </StackPanel>
+
+                <StackPanel Grid.Row="2"
+                            VerticalAlignment="Bottom"
+                            Margin="0,0,0,12">
+
+                    <TextBlock Text="NARZĘDZIA"
+                               Foreground="#6F7A8A"
+                               FontSize="11"
+                               FontWeight="SemiBold"
+                               Margin="16,0,0,8"/>
+
+                    <Button x:Name="DetectButton"
+                            Content="Wykryj BeamNG"
+                            Style="{StaticResource SidebarButtonStyle}"
+                            Click="DetectButton_Click"/>
+
+                    <Button x:Name="InstallModButton"
+                            Content="Zainstaluj mod"
+                            Style="{StaticResource PrimaryButtonStyle}"
+                            IsEnabled="False"
+                            Click="InstallModButton_Click"/>
+
+                </StackPanel>
+
+                <Border Grid.Row="3"
+                        Background="#1D212A"
+                        CornerRadius="10"
+                        Padding="12"
+                        Margin="8,6">
+
+                    <StackPanel>
+                        <TextBlock Text="Projekt w budowie"
+                                   FontWeight="SemiBold"
+                                   FontSize="12"/>
+
+                        <TextBlock Text="Podgląd interfejsu v0.2"
+                                   Foreground="{StaticResource TextMutedBrush}"
+                                   FontSize="11"
+                                   Margin="0,4,0,0"/>
+                    </StackPanel>
+
+                </Border>
+
+            </Grid>
+
+        </Border>
+
+        <!-- ŚRODEK -->
+        <Grid Grid.Column="1"
+              Margin="22,18,18,18">
+
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0"
+                  Margin="0,0,0,16">
+
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+
+                    <TextBlock Text="Biblioteka modów"
+                               FontSize="27"
+                               FontWeight="Bold"/>
+
+                    <TextBlock Text="Zarządzaj modami, zgodnością i aktualizacjami"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               FontSize="13"
+                               Margin="0,4,0,0"/>
+
+                </StackPanel>
+
+                <Border Grid.Column="1"
+                        Background="#1C2028"
+                        BorderBrush="{StaticResource BorderBrushSoft}"
+                        BorderThickness="1"
+                        CornerRadius="10"
+                        Padding="14,9"
+                        VerticalAlignment="Center">
+
+                    <TextBlock Text="{Binding ElementName=ModsGrid, Path=Items.Count, StringFormat={}{0} modów}"
+                               FontWeight="SemiBold"
+                               Foreground="#DDE2EA"/>
+
+                </Border>
+
+            </Grid>
+
+            <Border Grid.Row="1"
+                    Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrushSoft}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="14,11"
+                    Margin="0,0,0,12">
+
+                <TextBlock x:Name="StatusText"
+                           Text="Najpierw wykryj BeamNG."
+                           Foreground="#BBC3CF"
+                           TextWrapping="Wrap"/>
+
+            </Border>
+
+            <Border Grid.Row="2"
+                    Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrushSoft}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="1">
+
+                <DataGrid x:Name="ModsGrid">
+
+                    <DataGrid.Columns>
+
+                        <DataGridTextColumn Header="Mod"
+                                            Binding="{Binding Name}"
+                                            Width="*"
+                                            MinWidth="170"/>
+
+                        <DataGridTextColumn Header="Źródło"
+                                            Binding="{Binding Source}"
+                                            Width="135"/>
+
+                        <DataGridTextColumn Header="Typ"
+                                            Binding="{Binding Type}"
+                                            Width="105"/>
+
+                        <DataGridTextColumn Header="Wersja"
+                                            Binding="{Binding ModVersion}"
+                                            Width="90"/>
+
+                        <DataGridTextColumn Header="Aktualizacje"
+                                            Binding="{Binding UpdateStatus}"
+                                            Width="150"/>
+
+                        <DataGridTextColumn Header="Rozmiar"
+                                            Binding="{Binding Size}"
+                                            Width="85"/>
+
+                        <DataGridTextColumn Header="Plik zmieniony"
+                                            Binding="{Binding Modified}"
+                                            Width="135"/>
+
+                        <DataGridTextColumn Header="Stan"
+                                            Binding="{Binding Status}"
+                                            Width="85"/>
+
+                        <DataGridTemplateColumn Header="Zgodność"
+                                                Width="175">
+
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+
+                                    <Border CornerRadius="6"
+                                            Padding="8,4"
+                                            HorizontalAlignment="Left">
+
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+
                                                 <Setter Property="Background"
-                                                        Value="Green"/>
-                                            </DataTrigger>
+                                                        Value="#4C5563"/>
 
-                                            <DataTrigger Binding="{Binding Compatibility}"
-                                                         Value="Prawdopodobnie zgodny">
-                                                <Setter Property="Background"
-                                                        Value="Goldenrod"/>
-                                            </DataTrigger>
+                                                <Style.Triggers>
 
-                                            <DataTrigger Binding="{Binding Compatibility}"
-                                                         Value="Ryzyko problemów">
-                                                <Setter Property="Background"
-                                                        Value="DarkOrange"/>
-                                            </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Compatibility}"
+                                                                 Value="Zgodny">
+                                                        <Setter Property="Background"
+                                                                Value="#237A4B"/>
+                                                    </DataTrigger>
 
-                                            <DataTrigger Binding="{Binding Compatibility}"
-                                                         Value="Niezgodny">
-                                                <Setter Property="Background"
-                                                        Value="Red"/>
-                                            </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Compatibility}"
+                                                                 Value="Prawdopodobnie zgodny">
+                                                        <Setter Property="Background"
+                                                                Value="#9A7B16"/>
+                                                    </DataTrigger>
 
-                                        </Style.Triggers>
-                                    </Style>
-                                </Border.Style>
+                                                    <DataTrigger Binding="{Binding Compatibility}"
+                                                                 Value="Ryzyko problemów">
+                                                        <Setter Property="Background"
+                                                                Value="#B85C1E"/>
+                                                    </DataTrigger>
 
-                                <TextBlock Text="{Binding Compatibility}"
-                                           Foreground="White"
+                                                    <DataTrigger Binding="{Binding Compatibility}"
+                                                                 Value="Niezgodny">
+                                                        <Setter Property="Background"
+                                                                Value="#A53A43"/>
+                                                    </DataTrigger>
+
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+
+                                        <TextBlock Text="{Binding Compatibility}"
+                                                   Foreground="White"
+                                                   FontWeight="SemiBold"
+                                                   FontSize="12"/>
+
+                                    </Border>
+
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+
+                        </DataGridTemplateColumn>
+
+                    </DataGrid.Columns>
+
+                </DataGrid>
+
+            </Border>
+
+        </Grid>
+
+        <!-- PRAWY PANEL SZCZEGÓŁÓW -->
+        <Border Grid.Column="2"
+                Background="#151820"
+                BorderBrush="#2A2F39"
+                BorderThickness="1,0,0,0">
+
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+
+                <StackPanel Margin="20"
+                            DataContext="{Binding SelectedItem, ElementName=ModsGrid}">
+
+                    <TextBlock Text="Szczegóły moda"
+                               FontSize="20"
+                               FontWeight="Bold"
+                               Margin="0,0,0,14"/>
+
+                    <Border Height="190"
+                            CornerRadius="14"
+                            BorderBrush="#343A46"
+                            BorderThickness="1"
+                            Margin="0,0,0,18">
+
+                        <Border.Background>
+                            <LinearGradientBrush StartPoint="0,0"
+                                                 EndPoint="1,1">
+                                <GradientStop Color="#312A66"
+                                              Offset="0"/>
+                                <GradientStop Color="#1D2230"
+                                              Offset="1"/>
+                            </LinearGradientBrush>
+                        </Border.Background>
+
+                        <Grid>
+
+                            <StackPanel VerticalAlignment="Center"
+                                        HorizontalAlignment="Center">
+
+                                <TextBlock Text="MOD"
+                                           FontSize="34"
                                            FontWeight="Bold"
+                                           Foreground="#E8E4FF"
                                            HorizontalAlignment="Center"/>
 
-                            </Border>
+                                <TextBlock Text="Miniatura moda pojawi się tutaj"
+                                           Foreground="#A8B1C0"
+                                           FontSize="12"
+                                           Margin="0,8,0,0"/>
 
-                        </DataTemplate>
-                    </DataGridTemplateColumn.CellTemplate>
+                            </StackPanel>
 
-                </DataGridTemplateColumn>
+                        </Grid>
 
-                <DataGridTextColumn Header="Powód"
-                                    Binding="{Binding CompatibilityReason}"
-                                    Width="310"/>
+                    </Border>
 
-            </DataGrid.Columns>
+                    <TextBlock Text="{Binding Name, TargetNullValue=Wybierz mod z listy}"
+                               FontSize="22"
+                               FontWeight="Bold"
+                               TextWrapping="Wrap"/>
 
-        </DataGrid>
+                    <TextBlock Text="{Binding Source, TargetNullValue=Brak wybranego moda}"
+                               Foreground="{StaticResource TextMutedBrush}"
+                               Margin="0,5,0,18"/>
+
+                    <Border Background="#1D212A"
+                            CornerRadius="10"
+                            Padding="14"
+                            Margin="0,0,0,12">
+
+                        <Grid>
+
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel>
+                                <TextBlock Text="Typ"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="11"/>
+
+                                <TextBlock Text="{Binding Type, TargetNullValue=—}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,3,0,0"/>
+                            </StackPanel>
+
+                            <StackPanel Grid.Column="1">
+                                <TextBlock Text="Wersja"
+                                           Foreground="{StaticResource TextMutedBrush}"
+                                           FontSize="11"/>
+
+                                <TextBlock Text="{Binding ModVersion, TargetNullValue=—}"
+                                           FontWeight="SemiBold"
+                                           Margin="0,3,0,0"/>
+                            </StackPanel>
+
+                        </Grid>
+
+                    </Border>
+
+                    <Border Background="#1D212A"
+                            CornerRadius="10"
+                            Padding="14"
+                            Margin="0,0,0,12">
+
+                        <StackPanel>
+
+                            <TextBlock Text="Aktualizacje"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       FontSize="11"/>
+
+                            <TextBlock Text="{Binding UpdateStatus, TargetNullValue=—}"
+                                       FontWeight="SemiBold"
+                                       Margin="0,4,0,10"/>
+
+                            <TextBlock Text="Stan pliku"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       FontSize="11"/>
+
+                            <TextBlock Text="{Binding Status, TargetNullValue=—}"
+                                       FontWeight="SemiBold"
+                                       Margin="0,4,0,0"/>
+
+                        </StackPanel>
+
+                    </Border>
+
+                    <Border Background="#1D212A"
+                            CornerRadius="10"
+                            Padding="14"
+                            Margin="0,0,0,12">
+
+                        <StackPanel>
+
+                            <TextBlock Text="Zgodność"
+                                       Foreground="{StaticResource TextMutedBrush}"
+                                       FontSize="11"/>
+
+                            <TextBlock Text="{Binding Compatibility, TargetNullValue=—}"
+                                       FontWeight="Bold"
+                                       FontSize="15"
+                                       Margin="0,4,0,8"/>
+
+                            <TextBlock Text="{Binding CompatibilityReason, TargetNullValue=Wybierz mod, aby zobaczyć szczegóły analizy.}"
+                                       TextWrapping="Wrap"
+                                       Foreground="#C7CED8"
+                                       FontSize="12"/>
+
+                        </StackPanel>
+
+                    </Border>
+
+                    <TextBlock Text="Podgląd obrazu moda i dodatkowe akcje dodamy w następnym kroku."
+                               Foreground="#737E8E"
+                               FontSize="11"
+                               TextWrapping="Wrap"
+                               Margin="2,4,2,0"/>
+
+                </StackPanel>
+
+            </ScrollViewer>
+
+        </Border>
 
     </Grid>
+
 </Window>
