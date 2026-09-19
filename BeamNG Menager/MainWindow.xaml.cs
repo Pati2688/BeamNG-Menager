@@ -23,6 +23,11 @@ namespace BeamNGModManager
         private List<ModInfo> currentMods = new List<ModInfo>();
         private List<CatalogMod> allCatalogMods = new List<CatalogMod>();
         private List<CatalogMod> catalogMods = new List<CatalogMod>();
+        private int currentCatalogPage = 0;
+        private bool isCatalogPageLoading = false;
+        private bool hasMoreCatalogPages = true;
+        private readonly SemaphoreSlim catalogThumbnailSemaphore =
+            new SemaphoreSlim(6);
 
         private static readonly HttpClient httpClient = CreateHttpClient();
         private static readonly HttpClient downloadClient = CreateDownloadHttpClient();
@@ -1077,6 +1082,36 @@ namespace BeamNGModManager
             ApplyCatalogSearch();
         }
 
+        private async void CatalogScrollViewer_ScrollChanged(
+            object sender,
+            System.Windows.Controls.ScrollChangedEventArgs e)
+        {
+            if (!hasMoreCatalogPages ||
+                isCatalogPageLoading ||
+                CatalogSearchBox == null ||
+                !string.IsNullOrWhiteSpace(
+                    CatalogSearchBox.Text))
+            {
+                return;
+            }
+
+            if (e.ExtentHeight <= 0)
+            {
+                return;
+            }
+
+            bool nearBottom =
+                e.VerticalOffset >=
+                e.ExtentHeight -
+                e.ViewportHeight -
+                900;
+
+            if (nearBottom)
+            {
+                await LoadNextCatalogPageAsync();
+            }
+        }
+
         private void CatalogSearchBox_TextChanged(
             object sender,
             System.Windows.Controls.TextChangedEventArgs e)
@@ -1276,27 +1311,47 @@ namespace BeamNGModManager
 
         private async Task LoadCatalogAsync()
         {
+            if (isCatalogPageLoading)
+            {
+                return;
+            }
+
             RefreshCatalogButton.IsEnabled = false;
             DownloadModsButton.IsEnabled = false;
+            isCatalogPageLoading = true;
+            hasMoreCatalogPages = true;
+            currentCatalogPage = 0;
 
             CatalogStatusText.Text =
-                "Pobieranie najnowszych modów z Repo BeamNG...";
+                "Pobieranie pierwszej strony Repo BeamNG...";
 
             try
             {
+                List<CatalogMod> firstPage =
+                    await LoadBeamNgCatalogPageAsync(1);
+
                 catalogMods =
-                    await LoadBeamNgCatalogAsync();
+                    firstPage
+                        .GroupBy(
+                            mod => mod.ResourceUrl,
+                            StringComparer.OrdinalIgnoreCase)
+                        .Select(group => group.First())
+                        .ToList();
+
+                currentCatalogPage = 1;
+                hasMoreCatalogPages =
+                    catalogMods.Count > 0;
 
                 UpdateCatalogInstallationState();
                 ApplyCatalogSearch();
 
                 CatalogStatusText.Text =
-                    "Wczytywanie miniaturek w lepszej jakości...";
+                    "Załadowano " +
+                    catalogMods.Count +
+                    " modów. Przewiń niżej, aby doczytać kolejne.";
 
-                await CacheCatalogThumbnailsAsync(
-                    catalogMods);
-
-                ApplyCatalogSearch();
+                _ = EnhanceCatalogThumbnailsAsync(
+                    firstPage);
             }
             catch (Exception ex)
             {
@@ -1306,15 +1361,116 @@ namespace BeamNGModManager
             }
             finally
             {
+                isCatalogPageLoading = false;
                 RefreshCatalogButton.IsEnabled = true;
                 DownloadModsButton.IsEnabled = true;
             }
         }
 
-        private async Task<List<CatalogMod>> LoadBeamNgCatalogAsync()
+        private async Task LoadNextCatalogPageAsync()
         {
-            const string pageUrl =
-                "https://www.beamng.com/resources/?order=resource_date";
+            if (isCatalogPageLoading ||
+                !hasMoreCatalogPages)
+            {
+                return;
+            }
+
+            isCatalogPageLoading = true;
+
+            int nextPage =
+                currentCatalogPage + 1;
+
+            CatalogStatusText.Text =
+                "Doczytywanie strony " +
+                nextPage +
+                " Repo BeamNG...";
+
+            try
+            {
+                List<CatalogMod> pageMods =
+                    await LoadBeamNgCatalogPageAsync(
+                        nextPage);
+
+                HashSet<string> existingUrls =
+                    catalogMods
+                        .Select(mod => mod.ResourceUrl)
+                        .ToHashSet(
+                            StringComparer.OrdinalIgnoreCase);
+
+                List<CatalogMod> newMods =
+                    pageMods
+                        .Where(mod =>
+                            existingUrls.Add(
+                                mod.ResourceUrl))
+                        .ToList();
+
+                if (newMods.Count == 0)
+                {
+                    hasMoreCatalogPages = false;
+
+                    CatalogStatusText.Text =
+                        "Załadowano cały dostępny katalog: " +
+                        catalogMods.Count +
+                        " modów.";
+
+                    return;
+                }
+
+                catalogMods.AddRange(
+                    newMods);
+
+                currentCatalogPage =
+                    nextPage;
+
+                UpdateCatalogInstallationState();
+                ApplyCatalogSearch();
+
+                CatalogStatusText.Text =
+                    "Załadowano " +
+                    catalogMods.Count +
+                    " modów | strona " +
+                    currentCatalogPage +
+                    ". Przewiń niżej po kolejne.";
+
+                _ = EnhanceCatalogThumbnailsAsync(
+                    newMods);
+            }
+            catch (Exception ex)
+            {
+                CatalogStatusText.Text =
+                    "Nie udało się doczytać strony " +
+                    nextPage +
+                    ": " +
+                    ex.Message;
+            }
+            finally
+            {
+                isCatalogPageLoading = false;
+            }
+        }
+
+        private async Task EnhanceCatalogThumbnailsAsync(
+            List<CatalogMod> mods)
+        {
+            try
+            {
+                await CacheCatalogThumbnailsAsync(
+                    mods);
+
+                ApplyCatalogSearch();
+            }
+            catch
+            {
+                // Miniatury są dodatkiem. Sam katalog pozostaje dostępny.
+            }
+        }
+
+        private async Task<List<CatalogMod>> LoadBeamNgCatalogPageAsync(
+            int page)
+        {
+            string pageUrl =
+                "https://www.beamng.com/resources/?order=resource_date&page=" +
+                page;
 
             string html =
                 await httpClient.GetStringAsync(
@@ -1348,11 +1504,6 @@ namespace BeamNGModManager
                 }
 
                 result.Add(mod);
-
-                if (result.Count >= 24)
-                {
-                    break;
-                }
             }
 
             if (result.Count == 0)
@@ -1425,11 +1576,6 @@ namespace BeamNGModManager
                             ResourceUrl =
                                 absoluteUrl
                         });
-
-                    if (result.Count >= 24)
-                    {
-                        break;
-                    }
                 }
             }
 
@@ -1674,14 +1820,11 @@ namespace BeamNGModManager
         private async Task CacheCatalogThumbnailsAsync(
             List<CatalogMod> mods)
         {
-            using SemaphoreSlim semaphore =
-                new SemaphoreSlim(6);
-
             IEnumerable<Task> tasks =
                 mods.Select(
                     async mod =>
                     {
-                        await semaphore.WaitAsync();
+                        await catalogThumbnailSemaphore.WaitAsync();
 
                         try
                         {
@@ -1693,7 +1836,7 @@ namespace BeamNGModManager
                         }
                         finally
                         {
-                            semaphore.Release();
+                            catalogThumbnailSemaphore.Release();
                         }
                     });
 
