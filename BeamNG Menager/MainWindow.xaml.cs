@@ -1947,7 +1947,7 @@ namespace BeamNGModManager
             Match match =
                 Regex.Match(
                     html,
-                    @"data-time=[\""'](?<value>[0-9]+)[\""']",
+                    "data-time=[\\\"'](?<value>[0-9]+)[\\\"']",
                     RegexOptions.IgnoreCase);
 
             return match.Success &&
