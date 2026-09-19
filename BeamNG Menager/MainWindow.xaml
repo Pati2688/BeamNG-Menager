@@ -273,9 +273,11 @@
                                FontWeight="SemiBold"
                                Margin="16,0,0,8"/>
 
-                    <Button Content="Biblioteka modów"
+                    <Button x:Name="LibraryButton"
+                            Content="Biblioteka modów"
                             Style="{StaticResource SidebarButtonStyle}"
-                            Background="{StaticResource AccentSoftBrush}"/>
+                            Background="{StaticResource AccentSoftBrush}"
+                            Click="LibraryButton_Click"/>
 
                     <Button x:Name="DownloadModsButton"
                             Content="Pobieranie modów"
@@ -344,7 +346,8 @@
         </Border>
 
         <!-- ŚRODEK -->
-        <Grid Grid.Column="1"
+        <Grid x:Name="LibraryView"
+              Grid.Column="1"
               Margin="22,18,18,18">
 
             <Grid.RowDefinitions>
@@ -544,8 +547,126 @@
 
         </Grid>
 
+        <!-- POBIERANIE MODÓW -->
+        <Grid x:Name="DownloadView"
+              Grid.Column="1"
+              Grid.ColumnSpan="2"
+              Margin="22,18,22,18"
+              Visibility="Collapsed">
+
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0"
+                  Margin="0,0,0,16">
+
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+
+                <StackPanel>
+                    <TextBlock Text="Pobieranie modów"
+                               FontSize="27"
+                               FontWeight="Bold"/>
+
+                    <TextBlock Text="Wybierz mod z katalogu i pobierz go bezpośrednio przez menedżer."
+                               Foreground="{StaticResource TextMutedBrush}"
+                               FontSize="13"
+                               Margin="0,4,0,0"/>
+                </StackPanel>
+
+                <Button x:Name="RefreshCatalogButton"
+                        Grid.Column="1"
+                        Content="Odśwież katalog"
+                        Style="{StaticResource PrimaryButtonStyle}"
+                        Width="160"
+                        Margin="10,0,0,0"
+                        Click="RefreshCatalogButton_Click"/>
+
+            </Grid>
+
+            <Border Grid.Row="1"
+                    Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrushSoft}"
+                    BorderThickness="1"
+                    CornerRadius="10"
+                    Padding="14,11"
+                    Margin="0,0,0,12">
+
+                <TextBlock x:Name="CatalogStatusText"
+                           Text="Katalog nie został jeszcze wczytany."
+                           Foreground="#BBC3CF"
+                           TextWrapping="Wrap"/>
+
+            </Border>
+
+            <Border Grid.Row="2"
+                    Background="{StaticResource PanelBrush}"
+                    BorderBrush="{StaticResource BorderBrushSoft}"
+                    BorderThickness="1"
+                    CornerRadius="12"
+                    Padding="1">
+
+                <DataGrid x:Name="CatalogGrid"
+                          HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Visible"
+                          CanUserResizeColumns="True">
+
+                    <DataGrid.Columns>
+
+                        <DataGridTextColumn Header="Mod"
+                                            Binding="{Binding Title}"
+                                            Width="2.0*"
+                                            MinWidth="240"/>
+
+                        <DataGridTextColumn Header="Źródło"
+                                            Binding="{Binding Source}"
+                                            Width="0.9*"
+                                            MinWidth="110"/>
+
+                        <DataGridTextColumn Header="Autor"
+                                            Binding="{Binding Author}"
+                                            Width="1.0*"
+                                            MinWidth="120"/>
+
+                        <DataGridTextColumn Header="Kategoria"
+                                            Binding="{Binding Category}"
+                                            Width="1.0*"
+                                            MinWidth="120"/>
+
+                        <DataGridTextColumn Header="Opis"
+                                            Binding="{Binding Description}"
+                                            Width="2.2*"
+                                            MinWidth="260"/>
+
+                        <DataGridTemplateColumn Header=""
+                                                Width="125">
+                            <DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Button Content="Pobierz"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            Margin="4"
+                                            Padding="12,7"
+                                            Click="DownloadCatalogItem_Click"/>
+                                </DataTemplate>
+                            </DataGridTemplateColumn.CellTemplate>
+                        </DataGridTemplateColumn>
+
+                    </DataGrid.Columns>
+
+                </DataGrid>
+
+            </Border>
+
+        </Grid>
+
         <!-- PRAWY PANEL SZCZEGÓŁÓW -->
-        <Border Grid.Column="2"
+        <Border x:Name="DetailsPanel"
+                Grid.Column="2"
                 Background="#151820"
                 BorderBrush="#2A2F39"
                 BorderThickness="1,0,0,0">
