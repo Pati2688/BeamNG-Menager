@@ -573,7 +573,7 @@
                                FontSize="27"
                                FontWeight="Bold"/>
 
-                    <TextBlock Text="24 najnowsze mody — układ 6 × 4"
+                    <TextBlock Text="24 najnowsze mody — 4 kafelki w rzędzie × 6 rzędów"
                                Foreground="{StaticResource TextMutedBrush}"
                                FontSize="13"
                                Margin="0,4,0,0"/>
@@ -604,98 +604,223 @@
 
             </Border>
 
-            <Border Grid.Row="2"
-                    Background="{StaticResource PanelBrush}"
-                    BorderBrush="{StaticResource BorderBrushSoft}"
-                    BorderThickness="1"
-                    CornerRadius="12"
-                    Padding="10">
+            <Grid Grid.Row="2">
 
-                <ScrollViewer VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
+                <Border x:Name="CatalogBrowseView"
+                        Background="{StaticResource PanelBrush}"
+                        BorderBrush="{StaticResource BorderBrushSoft}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="10">
 
-                    <ItemsControl x:Name="CatalogTiles">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
 
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <UniformGrid Columns="6"/>
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
+                        <ItemsControl x:Name="CatalogTiles">
 
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <UniformGrid Columns="4"/>
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
 
-                                <Border Background="#1C2028"
-                                        BorderBrush="#303641"
-                                        BorderThickness="1"
-                                        CornerRadius="10"
-                                        Margin="6"
-                                        Padding="8">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+
+                                    <Border Background="#1C2028"
+                                            BorderBrush="#303641"
+                                            BorderThickness="1"
+                                            CornerRadius="12"
+                                            Margin="7"
+                                            Padding="9"
+                                            Cursor="Hand"
+                                            MouseLeftButtonUp="CatalogTile_Click">
+
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <Border Grid.Row="0"
+                                                    Height="150"
+                                                    Background="#242A35"
+                                                    CornerRadius="9"
+                                                    ClipToBounds="True">
+
+                                                <Grid>
+                                                    <TextBlock Text="MOD"
+                                                               Foreground="#4C5563"
+                                                               FontSize="28"
+                                                               FontWeight="Bold"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"/>
+
+                                                    <Image Source="{Binding ThumbnailUrl}"
+                                                           Stretch="UniformToFill"/>
+                                                </Grid>
+
+                                            </Border>
+
+                                            <StackPanel Grid.Row="1"
+                                                        Margin="2,9,2,7">
+
+                                                <TextBlock Text="{Binding Title}"
+                                                           Foreground="#F2F4F8"
+                                                           FontWeight="SemiBold"
+                                                           FontSize="14"
+                                                           TextWrapping="Wrap"
+                                                           MaxHeight="42"/>
+
+                                                <TextBlock Text="{Binding Author}"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="11"
+                                                           Margin="0,4,0,0"
+                                                           TextTrimming="CharacterEllipsis"/>
+
+                                            </StackPanel>
+
+                                            <Button Grid.Row="2"
+                                                    Content="Pobierz"
+                                                    Style="{StaticResource PrimaryButtonStyle}"
+                                                    Margin="0"
+                                                    Padding="10,7"
+                                                    Click="DownloadCatalogItem_Click"/>
+
+                                        </Grid>
+
+                                    </Border>
+
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+
+                        </ItemsControl>
+
+                    </ScrollViewer>
+
+                </Border>
+
+                <Border x:Name="CatalogDetailView"
+                        Visibility="Collapsed"
+                        Background="{StaticResource PanelBrush}"
+                        BorderBrush="{StaticResource BorderBrushSoft}"
+                        BorderThickness="1"
+                        CornerRadius="12"
+                        Padding="18">
+
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+
+                            <Button Grid.Row="0"
+                                    Content="← Wróć do katalogu"
+                                    Style="{StaticResource SidebarButtonStyle}"
+                                    HorizontalAlignment="Left"
+                                    Margin="0,0,0,14"
+                                    Click="CatalogDetailBackButton_Click"/>
+
+                            <Grid Grid.Row="1">
+
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="1.35*"/>
+                                    <ColumnDefinition Width="1*"/>
+                                </Grid.ColumnDefinitions>
+
+                                <Border Grid.Column="0"
+                                        Height="360"
+                                        Background="#242A35"
+                                        CornerRadius="12"
+                                        ClipToBounds="True"
+                                        Margin="0,0,20,0">
 
                                     <Grid>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
+                                        <TextBlock Text="MOD"
+                                                   Foreground="#4C5563"
+                                                   FontSize="42"
+                                                   FontWeight="Bold"
+                                                   HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center"/>
 
-                                        <Border Grid.Row="0"
-                                                Height="105"
-                                                Background="#242A35"
-                                                CornerRadius="8"
-                                                ClipToBounds="True">
-
-                                            <Grid>
-                                                <TextBlock Text="MOD"
-                                                           Foreground="#4C5563"
-                                                           FontSize="24"
-                                                           FontWeight="Bold"
-                                                           HorizontalAlignment="Center"
-                                                           VerticalAlignment="Center"/>
-
-                                                <Image Source="{Binding ThumbnailUrl}"
-                                                       Stretch="UniformToFill"/>
-                                            </Grid>
-
-                                        </Border>
-
-                                        <StackPanel Grid.Row="1"
-                                                    Margin="2,8,2,6">
-
-                                            <TextBlock Text="{Binding Title}"
-                                                       Foreground="#F2F4F8"
-                                                       FontWeight="SemiBold"
-                                                       FontSize="13"
-                                                       TextWrapping="Wrap"
-                                                       MaxHeight="38"/>
-
-                                            <TextBlock Text="{Binding Author}"
-                                                       Foreground="{StaticResource TextMutedBrush}"
-                                                       FontSize="11"
-                                                       Margin="0,3,0,0"
-                                                       TextTrimming="CharacterEllipsis"/>
-
-                                        </StackPanel>
-
-                                        <Button Grid.Row="2"
-                                                Content="Pobierz"
-                                                Style="{StaticResource PrimaryButtonStyle}"
-                                                Margin="0"
-                                                Padding="10,7"
-                                                Click="DownloadCatalogItem_Click"/>
-
+                                        <Image Source="{Binding ThumbnailUrl}"
+                                               Stretch="UniformToFill"/>
                                     </Grid>
 
                                 </Border>
 
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
+                                <StackPanel Grid.Column="1"
+                                            VerticalAlignment="Top">
 
-                    </ItemsControl>
+                                    <TextBlock Text="{Binding Title}"
+                                               FontSize="26"
+                                               FontWeight="Bold"
+                                               TextWrapping="Wrap"/>
 
-                </ScrollViewer>
+                                    <TextBlock Text="{Binding Author}"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="13"
+                                               Margin="0,7,0,16"/>
 
-            </Border>
+                                    <TextBlock Text="Kategoria"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="11"/>
+
+                                    <TextBlock Text="{Binding Category}"
+                                               FontWeight="SemiBold"
+                                               Margin="0,3,0,12"/>
+
+                                    <TextBlock Text="Wersja"
+                                               Foreground="{StaticResource TextMutedBrush}"
+                                               FontSize="11"/>
+
+                                    <TextBlock Text="{Binding Version}"
+                                               FontWeight="SemiBold"
+                                               Margin="0,3,0,18"/>
+
+                                    <Button Content="Pobierz i zainstaluj"
+                                            Style="{StaticResource PrimaryButtonStyle}"
+                                            Margin="0"
+                                            Padding="16,10"
+                                            Click="DownloadCatalogItem_Click"/>
+
+                                </StackPanel>
+
+                            </Grid>
+
+                            <Border Grid.Row="2"
+                                    Background="#1D212A"
+                                    CornerRadius="10"
+                                    Padding="16"
+                                    Margin="0,18,0,0">
+
+                                <StackPanel>
+                                    <TextBlock Text="Opis"
+                                               FontSize="17"
+                                               FontWeight="SemiBold"
+                                               Margin="0,0,0,9"/>
+
+                                    <TextBlock Text="{Binding Description}"
+                                               Foreground="#CBD2DC"
+                                               FontSize="13"
+                                               TextWrapping="Wrap"
+                                               LineHeight="20"/>
+                                </StackPanel>
+
+                            </Border>
+
+                        </Grid>
+
+                    </ScrollViewer>
+
+                </Border>
+
+            </Grid>
 
         </Grid>
 
