@@ -717,6 +717,7 @@
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
                                 <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
                             </Grid.RowDefinitions>
 
                             <Button Grid.Row="0"
@@ -729,13 +730,15 @@
                             <Grid Grid.Row="1">
 
                                 <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="1.35*"/>
-                                    <ColumnDefinition Width="1*"/>
+                                    <ColumnDefinition Width="1.55*"/>
+                                    <ColumnDefinition Width="0.9*"/>
                                 </Grid.ColumnDefinitions>
 
                                 <Border Grid.Column="0"
-                                        Height="360"
+                                        Height="410"
                                         Background="#242A35"
+                                        BorderBrush="#343B48"
+                                        BorderThickness="1"
                                         CornerRadius="12"
                                         ClipToBounds="True"
                                         Margin="0,0,20,0">
@@ -754,72 +757,188 @@
 
                                 </Border>
 
-                                <StackPanel Grid.Column="1"
-                                            VerticalAlignment="Top">
+                                <Border Grid.Column="1"
+                                        Background="#1D212A"
+                                        BorderBrush="#303641"
+                                        BorderThickness="1"
+                                        CornerRadius="12"
+                                        Padding="16">
 
-                                    <TextBlock Text="{Binding Title}"
-                                               FontSize="26"
-                                               FontWeight="Bold"
-                                               TextWrapping="Wrap"/>
+                                    <StackPanel VerticalAlignment="Top">
 
-                                    <TextBlock Text="{Binding Author}"
-                                               Foreground="{StaticResource TextMutedBrush}"
-                                               FontSize="13"
-                                               Margin="0,7,0,16"/>
+                                        <TextBlock Text="{Binding Title}"
+                                                   FontSize="25"
+                                                   FontWeight="Bold"
+                                                   TextWrapping="Wrap"/>
 
-                                    <TextBlock Text="Kategoria"
-                                               Foreground="{StaticResource TextMutedBrush}"
-                                               FontSize="11"/>
+                                        <TextBlock Text="{Binding Author}"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="13"
+                                                   Margin="0,7,0,18"/>
 
-                                    <TextBlock Text="{Binding Category}"
-                                               FontWeight="SemiBold"
-                                               Margin="0,3,0,12"/>
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
 
-                                    <TextBlock Text="Wersja"
-                                               Foreground="{StaticResource TextMutedBrush}"
-                                               FontSize="11"/>
+                                            <StackPanel>
+                                                <TextBlock Text="Kategoria"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="11"/>
+                                                <TextBlock Text="{Binding Category}"
+                                                           FontWeight="SemiBold"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,3,8,0"/>
+                                            </StackPanel>
 
-                                    <TextBlock Text="{Binding Version}"
-                                               FontWeight="SemiBold"
-                                               Margin="0,3,0,18"/>
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="Wersja"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="11"/>
+                                                <TextBlock Text="{Binding Version}"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,3,0,0"/>
+                                            </StackPanel>
+                                        </Grid>
 
-                                    <Button Content="Pobierz i zainstaluj"
-                                            Style="{StaticResource PrimaryButtonStyle}"
-                                            Margin="0"
-                                            Padding="16,10"
-                                            Click="DownloadCatalogItem_Click"/>
+                                        <Grid Margin="0,8,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
 
-                                </StackPanel>
+                                            <StackPanel>
+                                                <TextBlock Text="Rozmiar"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="11"/>
+                                                <TextBlock Text="{Binding FileSize}"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,3,8,0"/>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="Pobrania"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="11"/>
+                                                <TextBlock Text="{Binding TotalDownloads}"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,3,0,0"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <Grid Margin="0,8,0,8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+
+                                            <StackPanel>
+                                                <TextBlock Text="Subskrypcje"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="11"/>
+                                                <TextBlock Text="{Binding Subscriptions}"
+                                                           FontWeight="SemiBold"
+                                                           Margin="0,3,8,0"/>
+                                            </StackPanel>
+
+                                            <StackPanel Grid.Column="1">
+                                                <TextBlock Text="Ocena"
+                                                           Foreground="{StaticResource TextMutedBrush}"
+                                                           FontSize="11"/>
+                                                <TextBlock Text="{Binding Rating}"
+                                                           FontWeight="SemiBold"
+                                                           TextWrapping="Wrap"
+                                                           Margin="0,3,0,0"/>
+                                            </StackPanel>
+                                        </Grid>
+
+                                        <TextBlock Text="Ostatnia aktualizacja"
+                                                   Foreground="{StaticResource TextMutedBrush}"
+                                                   FontSize="11"
+                                                   Margin="0,8,0,0"/>
+
+                                        <TextBlock Text="{Binding LastUpdate}"
+                                                   FontWeight="SemiBold"
+                                                   TextWrapping="Wrap"
+                                                   Margin="0,3,0,18"/>
+
+                                        <Button Content="Pobierz i zainstaluj"
+                                                Style="{StaticResource PrimaryButtonStyle}"
+                                                Margin="0"
+                                                Padding="16,11"
+                                                Click="DownloadCatalogItem_Click"/>
+
+                                    </StackPanel>
+
+                                </Border>
 
                             </Grid>
 
                             <Border Grid.Row="2"
                                     Background="#1D212A"
+                                    BorderBrush="#303641"
+                                    BorderThickness="1"
                                     CornerRadius="10"
-                                    Padding="16"
+                                    Padding="18"
                                     Margin="0,18,0,0">
 
                                 <StackPanel>
                                     <TextBlock Text="Opis"
-                                               FontSize="17"
+                                               FontSize="18"
                                                FontWeight="SemiBold"
-                                               Margin="0,0,0,9"/>
+                                               Margin="0,0,0,10"/>
 
                                     <TextBlock Text="{Binding Description}"
                                                Foreground="#CBD2DC"
                                                FontSize="13"
                                                TextWrapping="Wrap"
-                                               LineHeight="20"/>
+                                               LineHeight="21"/>
                                 </StackPanel>
 
                             </Border>
+
+                            <StackPanel Grid.Row="3"
+                                        Margin="0,20,0,0">
+
+                                <TextBlock Text="Galeria"
+                                           FontSize="20"
+                                           FontWeight="Bold"
+                                           Margin="0,0,0,10"/>
+
+                                <ItemsControl ItemsSource="{Binding GalleryImages}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel/>
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="#1D212A"
+                                                    BorderBrush="#303641"
+                                                    BorderThickness="1"
+                                                    CornerRadius="10"
+                                                    Margin="0,0,0,14"
+                                                    Padding="6"
+                                                    ClipToBounds="True">
+
+                                                <Image Source="{Binding}"
+                                                       Stretch="Uniform"
+                                                       MaxHeight="620"/>
+
+                                            </Border>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+
+                            </StackPanel>
 
                         </Grid>
 
                     </ScrollViewer>
 
                 </Border>
-
             </Grid>
 
         </Grid>
