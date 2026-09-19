@@ -1,9 +1,9 @@
-﻿<Window x:Class="BeamNGModManager.MainWindow"
+<Window x:Class="BeamNGModManager.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="BeamNG Mod Manager"
-        Height="720"
-        Width="1400"
+        Height="760"
+        Width="1550"
         WindowStartupLocation="CenterScreen">
 
     <Grid Margin="20">
@@ -62,7 +62,8 @@
                   Grid.Row="3"
                   AutoGenerateColumns="False"
                   IsReadOnly="True"
-                  CanUserAddRows="False">
+                  CanUserAddRows="False"
+                  SelectionMode="Single">
 
             <DataGrid.Columns>
 
@@ -82,17 +83,29 @@
                                     Binding="{Binding ModVersion}"
                                     Width="120"/>
 
+                <DataGridTextColumn Header="ID Repo"
+                                    Binding="{Binding RepositoryId}"
+                                    Width="90"/>
+
+                <DataGridTextColumn Header="Data moda"
+                                    Binding="{Binding ReleaseDate}"
+                                    Width="120"/>
+
+                <DataGridTextColumn Header="Aktualizacje"
+                                    Binding="{Binding UpdateStatus}"
+                                    Width="165"/>
+
                 <DataGridTextColumn Header="Rozmiar"
                                     Binding="{Binding Size}"
-                                    Width="100"/>
+                                    Width="95"/>
 
-                <DataGridTextColumn Header="Data"
+                <DataGridTextColumn Header="Plik zmieniony"
                                     Binding="{Binding Modified}"
                                     Width="145"/>
 
                 <DataGridTextColumn Header="Stan pliku"
                                     Binding="{Binding Status}"
-                                    Width="110"/>
+                                    Width="105"/>
 
                 <DataGridTemplateColumn Header="Zgodność"
                                         Width="190">
@@ -154,7 +167,7 @@
 
                 <DataGridTextColumn Header="Powód"
                                     Binding="{Binding CompatibilityReason}"
-                                    Width="300"/>
+                                    Width="310"/>
 
             </DataGrid.Columns>
 
