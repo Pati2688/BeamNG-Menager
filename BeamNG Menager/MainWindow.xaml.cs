@@ -1056,10 +1056,59 @@ namespace BeamNGModManager
             CatalogBrowseView.Visibility =
                 Visibility.Visible;
 
-            CatalogStatusText.Text =
-                "Gotowe: " +
-                catalogMods.Count +
-                " modów z Repo BeamNG.";
+            ApplyCatalogSearch();
+        }
+
+        private void CatalogSearchBox_TextChanged(
+            object sender,
+            System.Windows.Controls.TextChangedEventArgs e)
+        {
+            ApplyCatalogSearch();
+        }
+
+        private void ApplyCatalogSearch()
+        {
+            if (CatalogTiles == null ||
+                CatalogSearchBox == null)
+            {
+                return;
+            }
+
+            string query =
+                CatalogSearchBox.Text
+                    .Trim();
+
+            List<CatalogMod> visibleMods =
+                string.IsNullOrWhiteSpace(query)
+                    ? catalogMods
+                    : catalogMods
+                        .Where(mod =>
+                            mod.Title.Contains(
+                                query,
+                                StringComparison.OrdinalIgnoreCase))
+                        .ToList();
+
+            CatalogTiles.ItemsSource = null;
+            CatalogTiles.ItemsSource = visibleMods;
+
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                CatalogStatusText.Text =
+                    "Gotowe: " +
+                    catalogMods.Count +
+                    " modów z Repo BeamNG.";
+            }
+            else
+            {
+                CatalogStatusText.Text =
+                    "Znaleziono: " +
+                    visibleMods.Count +
+                    " z " +
+                    catalogMods.Count +
+                    " modów dla „" +
+                    query +
+                    "”.";
+            }
         }
 
         private async void RefreshCatalogButton_Click(
@@ -1082,22 +1131,15 @@ namespace BeamNGModManager
                 catalogMods =
                     await LoadBeamNgCatalogAsync();
 
-                CatalogTiles.ItemsSource = null;
-                CatalogTiles.ItemsSource = catalogMods;
+                ApplyCatalogSearch();
 
                 CatalogStatusText.Text =
-                    "Wczytywanie miniaturek...";
+                    "Wczytywanie miniaturek w lepszej jakości...";
 
                 await CacheCatalogThumbnailsAsync(
                     catalogMods);
 
-                CatalogTiles.ItemsSource = null;
-                CatalogTiles.ItemsSource = catalogMods;
-
-                CatalogStatusText.Text =
-                    "Gotowe: " +
-                    catalogMods.Count +
-                    " modów z Repo BeamNG.";
+                ApplyCatalogSearch();
             }
             catch (Exception ex)
             {
@@ -1501,36 +1543,47 @@ namespace BeamNGModManager
             string imageUrl =
                 mod.ThumbnailUrl;
 
-            if (string.IsNullOrWhiteSpace(imageUrl))
+            try
             {
-                try
+                string html =
+                    await httpClient.GetStringAsync(
+                        mod.ResourceUrl);
+
+                Uri resourceUri =
+                    new Uri(mod.ResourceUrl);
+
+                string highResolutionImage =
+                    ExtractGalleryImageUrls(
+                        html,
+                        resourceUri)
+                        .FirstOrDefault() ??
+                    "";
+
+                if (!string.IsNullOrWhiteSpace(
+                    highResolutionImage))
                 {
-                    string html =
-                        await httpClient.GetStringAsync(
-                            mod.ResourceUrl);
-
-                    Uri resourceUri =
-                        new Uri(mod.ResourceUrl);
-
                     imageUrl =
+                        highResolutionImage;
+                }
+                else
+                {
+                    string pageThumbnail =
                         ExtractThumbnailUrl(
                             html,
                             resourceUri);
 
-                    if (string.IsNullOrWhiteSpace(imageUrl))
+                    if (!string.IsNullOrWhiteSpace(
+                        pageThumbnail))
                     {
                         imageUrl =
-                            ExtractGalleryImageUrls(
-                                html,
-                                resourceUri)
-                                .FirstOrDefault() ??
-                            "";
+                            pageThumbnail;
                     }
                 }
-                catch
-                {
-                    return;
-                }
+            }
+            catch
+            {
+                // Jeśli pełna strona zasobu nie odpowie,
+                // zostawiamy miniaturę z listy Repo.
             }
 
             if (string.IsNullOrWhiteSpace(imageUrl))
@@ -1639,28 +1692,6 @@ namespace BeamNGModManager
                     "All-Time Rating:",
                     "Version ");
 
-            string detailThumbnail =
-                ExtractThumbnailUrl(
-                    html,
-                    resourceUri);
-
-            if (!string.IsNullOrWhiteSpace(
-                detailThumbnail))
-            {
-                string cachedThumbnail =
-                    await CacheRemoteImageAsync(
-                        detailThumbnail,
-                        mod.ResourceUrl,
-                        "thumbs");
-
-                if (!string.IsNullOrWhiteSpace(
-                    cachedThumbnail))
-                {
-                    mod.ThumbnailUrl =
-                        cachedThumbnail;
-                }
-            }
-
             List<string> galleryUrls =
                 ExtractGalleryImageUrls(
                     html,
@@ -1670,6 +1701,36 @@ namespace BeamNGModManager
                 await CacheGalleryImagesAsync(
                     galleryUrls,
                     mod.ResourceUrl);
+
+            if (mod.GalleryImages.Count > 0)
+            {
+                mod.ThumbnailUrl =
+                    mod.GalleryImages[0];
+            }
+            else
+            {
+                string detailThumbnail =
+                    ExtractThumbnailUrl(
+                        html,
+                        resourceUri);
+
+                if (!string.IsNullOrWhiteSpace(
+                    detailThumbnail))
+                {
+                    string cachedThumbnail =
+                        await CacheRemoteImageAsync(
+                            detailThumbnail,
+                            mod.ResourceUrl,
+                            "thumbs");
+
+                    if (!string.IsNullOrWhiteSpace(
+                        cachedThumbnail))
+                    {
+                        mod.ThumbnailUrl =
+                            cachedThumbnail;
+                    }
+                }
+            }
 
             mod.DetailsLoaded = true;
         }
