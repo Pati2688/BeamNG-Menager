@@ -1609,17 +1609,17 @@ namespace BeamNGModManager
             mod.FileSize =
                 ExtractRegexValue(
                     plain,
-                    @"Download Now\\s+(?<value>[0-9][0-9.,]*\\s*(?:KB|MB|GB))");
+                    @"Download Now\s+(?<value>[0-9][0-9.,]*\s*(?:KB|MB|GB))");
 
             mod.TotalDownloads =
                 ExtractRegexValue(
                     plain,
-                    @"Total Downloads:\\s*(?<value>[0-9][0-9,.\\s]*)");
+                    @"Total Downloads:\s*(?<value>[0-9][0-9,.\s]*)");
 
             mod.Subscriptions =
                 ExtractRegexValue(
                     plain,
-                    @"Subscriptions:\\s*(?<value>[0-9][0-9,.\\s]*)");
+                    @"Subscriptions:\s*(?<value>[0-9][0-9,.\s]*)");
 
             mod.FirstRelease =
                 ExtractBetweenLabels(
@@ -1747,7 +1747,7 @@ namespace BeamNGModManager
                 Regex.Match(
                     text,
                     Regex.Escape(startLabel) +
-                    @"\\s*(?<value>.*?)\\s*" +
+                    @"\s*(?<value>.*?)\s*" +
                     Regex.Escape(endLabel),
                     RegexOptions.IgnoreCase |
                     RegexOptions.Singleline);
@@ -1760,7 +1760,7 @@ namespace BeamNGModManager
             string value =
                 Regex.Replace(
                     match.Groups["value"].Value,
-                    @"\\s+",
+                    @"\s+",
                     " ")
                     .Trim();
 
@@ -2019,7 +2019,7 @@ namespace BeamNGModManager
             Match match =
                 Regex.Match(
                     plain,
-                    @"\\bVersion[:\\s]+(?<value>[0-9][0-9A-Za-z._+\\-]*)",
+                    @"\bVersion[:\s]+(?<value>[0-9][0-9A-Za-z._+\-]*)",
                     RegexOptions.IgnoreCase);
 
             return match.Success
