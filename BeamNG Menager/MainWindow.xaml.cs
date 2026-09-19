@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
+using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -26,6 +27,8 @@ namespace BeamNGModManager
         private int currentCatalogPage = 0;
         private bool isCatalogPageLoading = false;
         private bool hasMoreCatalogPages = true;
+        private string catalogSortMode = "date";
+        private string catalogServerOrder = "resource_date";
         private readonly SemaphoreSlim catalogThumbnailSemaphore =
             new SemaphoreSlim(6);
 
@@ -1112,6 +1115,58 @@ namespace BeamNGModManager
             }
         }
 
+        private async void CatalogSortComboBox_SelectionChanged(
+            object sender,
+            System.Windows.Controls.SelectionChangedEventArgs e)
+        {
+            if (CatalogSortComboBox?.SelectedItem is not
+                System.Windows.Controls.ComboBoxItem selectedItem)
+            {
+                return;
+            }
+
+            string mode =
+                selectedItem.Tag?.ToString() ??
+                "date";
+
+            catalogSortMode =
+                mode;
+
+            if (!IsLoaded)
+            {
+                catalogServerOrder =
+                    mode == "downloads"
+                        ? "download_count"
+                        : "resource_date";
+
+                return;
+            }
+
+            if (mode == "size")
+            {
+                ApplyCatalogSearch();
+                return;
+            }
+
+            string desiredServerOrder =
+                mode == "downloads"
+                    ? "download_count"
+                    : "resource_date";
+
+            if (!desiredServerOrder.Equals(
+                catalogServerOrder,
+                StringComparison.OrdinalIgnoreCase))
+            {
+                catalogServerOrder =
+                    desiredServerOrder;
+
+                await LoadCatalogAsync();
+                return;
+            }
+
+            ApplyCatalogSearch();
+        }
+
         private void CatalogSearchBox_TextChanged(
             object sender,
             System.Windows.Controls.TextChangedEventArgs e)
@@ -1269,25 +1324,58 @@ namespace BeamNGModManager
                 CatalogSearchBox.Text
                     .Trim();
 
-            List<CatalogMod> visibleMods =
+            IEnumerable<CatalogMod> filteredMods =
                 string.IsNullOrWhiteSpace(query)
                     ? catalogMods
-                    : catalogMods
-                        .Where(mod =>
-                            mod.Title.Contains(
-                                query,
-                                StringComparison.OrdinalIgnoreCase))
-                        .ToList();
+                    : catalogMods.Where(mod =>
+                        mod.Title.Contains(
+                            query,
+                            StringComparison.OrdinalIgnoreCase));
+
+            IEnumerable<CatalogMod> sortedMods =
+                catalogSortMode switch
+                {
+                    "downloads" =>
+                        filteredMods
+                            .OrderByDescending(mod =>
+                                mod.DownloadCountValue)
+                            .ThenByDescending(mod =>
+                                mod.PublishedUnixTime),
+
+                    "size" =>
+                        filteredMods
+                            .OrderByDescending(mod =>
+                                mod.FileSizeBytes)
+                            .ThenByDescending(mod =>
+                                mod.DownloadCountValue),
+
+                    _ =>
+                        filteredMods
+                            .OrderByDescending(mod =>
+                                mod.PublishedUnixTime)
+                };
+
+            List<CatalogMod> visibleMods =
+                sortedMods.ToList();
 
             CatalogTiles.ItemsSource = null;
             CatalogTiles.ItemsSource = visibleMods;
 
             if (string.IsNullOrWhiteSpace(query))
             {
+                string sortInfo =
+                    catalogSortMode == "downloads"
+                        ? " | najczęściej pobierane"
+                        : catalogSortMode == "size"
+                            ? " | największy rozmiar wśród załadowanych"
+                            : " | data publikacji";
+
                 CatalogStatusText.Text =
                     "Gotowe: " +
                     catalogMods.Count +
-                    " modów z Repo BeamNG.";
+                    " modów z Repo BeamNG" +
+                    sortInfo +
+                    ".";
             }
             else
             {
@@ -1469,7 +1557,9 @@ namespace BeamNGModManager
             int page)
         {
             string pageUrl =
-                "https://www.beamng.com/resources/?order=resource_date&page=" +
+                "https://www.beamng.com/resources/?order=" +
+                catalogServerOrder +
+                "&page=" +
                 page;
 
             string html =
@@ -1570,6 +1660,16 @@ namespace BeamNGModManager
                                 ExtractThumbnailUrl(
                                     nearby,
                                     pageUri),
+                            TotalDownloads =
+                                ExtractCatalogDownloads(
+                                    nearby),
+                            DownloadCountValue =
+                                ParseCountValue(
+                                    ExtractCatalogDownloads(
+                                        nearby)),
+                            PublishedUnixTime =
+                                ExtractPublishedUnixTime(
+                                    nearby),
                             RepositoryId =
                                 ExtractRepositoryIdFromResourceUrl(
                                     absoluteUrl),
@@ -1658,6 +1758,10 @@ namespace BeamNGModManager
                         resourceMatch.Groups["url"].Value),
                     pageUri);
 
+            string downloads =
+                ExtractCatalogDownloads(
+                    card);
+
             return new CatalogMod
             {
                 Title = title,
@@ -1678,6 +1782,14 @@ namespace BeamNGModManager
                     ExtractThumbnailUrl(
                         card,
                         pageUri),
+                TotalDownloads =
+                    downloads,
+                DownloadCountValue =
+                    ParseCountValue(
+                        downloads),
+                PublishedUnixTime =
+                    ExtractPublishedUnixTime(
+                        card),
                 RepositoryId =
                     ExtractRepositoryIdFromResourceUrl(
                         resourceUrl),
@@ -1734,7 +1846,7 @@ namespace BeamNGModManager
 
             int marker =
                 html.LastIndexOf(
-                    "order=resource_date",
+                    "order=",
                     StringComparison.OrdinalIgnoreCase);
 
             return marker >= 0
@@ -1776,6 +1888,125 @@ namespace BeamNGModManager
             return string.IsNullOrWhiteSpace(category)
                 ? "Repo"
                 : category;
+        }
+
+        private string ExtractCatalogDownloads(
+            string html)
+        {
+            string text =
+                StripHtml(html);
+
+            Match match =
+                Regex.Match(
+                    text,
+                    @"Downloads:\s*(?<value>[0-9][0-9,.\s]*)\s+Subscriptions:",
+                    RegexOptions.IgnoreCase);
+
+            if (!match.Success)
+            {
+                return "—";
+            }
+
+            string value =
+                Regex.Replace(
+                    match.Groups["value"].Value,
+                    @"\s+",
+                    "")
+                    .Trim();
+
+            return string.IsNullOrWhiteSpace(value)
+                ? "—"
+                : value;
+        }
+
+        private long ParseCountValue(
+            string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                value == "—")
+            {
+                return 0;
+            }
+
+            string digits =
+                Regex.Replace(
+                    value,
+                    @"[^0-9]",
+                    "");
+
+            return long.TryParse(
+                digits,
+                out long parsed)
+                ? parsed
+                : 0;
+        }
+
+        private long ExtractPublishedUnixTime(
+            string html)
+        {
+            Match match =
+                Regex.Match(
+                    html,
+                    @"data-time=[\""'](?<value>[0-9]+)[\""']",
+                    RegexOptions.IgnoreCase);
+
+            return match.Success &&
+                long.TryParse(
+                    match.Groups["value"].Value,
+                    out long timestamp)
+                ? timestamp
+                : 0;
+        }
+
+        private long ParseFileSizeBytes(
+            string value)
+        {
+            if (string.IsNullOrWhiteSpace(value) ||
+                value == "—")
+            {
+                return 0;
+            }
+
+            Match match =
+                Regex.Match(
+                    value,
+                    @"(?<number>[0-9]+(?:[.,][0-9]+)?)\s*(?<unit>KB|MB|GB|B)",
+                    RegexOptions.IgnoreCase);
+
+            if (!match.Success)
+            {
+                return 0;
+            }
+
+            string numberText =
+                match.Groups["number"]
+                    .Value
+                    .Replace(',', '.');
+
+            if (!double.TryParse(
+                numberText,
+                NumberStyles.Float,
+                CultureInfo.InvariantCulture,
+                out double number))
+            {
+                return 0;
+            }
+
+            string unit =
+                match.Groups["unit"]
+                    .Value
+                    .ToUpperInvariant();
+
+            double multiplier =
+                unit switch
+                {
+                    "GB" => 1024d * 1024d * 1024d,
+                    "MB" => 1024d * 1024d,
+                    "KB" => 1024d,
+                    _ => 1d
+                };
+
+            return (long)(number * multiplier);
         }
 
         private string ExtractBeamNgCardVersion(
@@ -1858,6 +2089,10 @@ namespace BeamNGModManager
                 Uri resourceUri =
                     new Uri(mod.ResourceUrl);
 
+                UpdateCatalogSortMetadata(
+                    mod,
+                    html);
+
                 string highResolutionImage =
                     ExtractGalleryImageUrls(
                         html,
@@ -1907,6 +2142,56 @@ namespace BeamNGModManager
             {
                 mod.ThumbnailUrl =
                     cached;
+            }
+        }
+
+        private void UpdateCatalogSortMetadata(
+            CatalogMod mod,
+            string html)
+        {
+            string plain =
+                StripHtml(html);
+
+            string fileSize =
+                ExtractRegexValue(
+                    plain,
+                    @"Download Now\s+(?<value>[0-9][0-9.,]*\s*(?:KB|MB|GB))");
+
+            if (fileSize != "—")
+            {
+                mod.FileSize =
+                    fileSize;
+
+                mod.FileSizeBytes =
+                    ParseFileSizeBytes(
+                        fileSize);
+            }
+
+            string downloads =
+                ExtractRegexValue(
+                    plain,
+                    @"Total Downloads:\s*(?<value>[0-9][0-9,.\s]*)");
+
+            if (downloads != "—")
+            {
+                mod.TotalDownloads =
+                    downloads;
+
+                mod.DownloadCountValue =
+                    ParseCountValue(
+                        downloads);
+            }
+
+            string firstRelease =
+                ExtractBetweenLabels(
+                    plain,
+                    "First Release:",
+                    "Last Update:");
+
+            if (firstRelease != "—")
+            {
+                mod.FirstRelease =
+                    firstRelease;
             }
         }
 
@@ -1965,26 +2250,14 @@ namespace BeamNGModManager
             string plain =
                 StripHtml(html);
 
-            mod.FileSize =
-                ExtractRegexValue(
-                    plain,
-                    @"Download Now\s+(?<value>[0-9][0-9.,]*\s*(?:KB|MB|GB))");
-
-            mod.TotalDownloads =
-                ExtractRegexValue(
-                    plain,
-                    @"Total Downloads:\s*(?<value>[0-9][0-9,.\s]*)");
+            UpdateCatalogSortMetadata(
+                mod,
+                html);
 
             mod.Subscriptions =
                 ExtractRegexValue(
                     plain,
                     @"Subscriptions:\s*(?<value>[0-9][0-9,.\s]*)");
-
-            mod.FirstRelease =
-                ExtractBetweenLabels(
-                    plain,
-                    "First Release:",
-                    "Last Update:");
 
             mod.LastUpdate =
                 ExtractBetweenLabels(
@@ -4146,6 +4419,9 @@ namespace BeamNGModManager
         public string FirstRelease { get; set; } = "—";
         public string LastUpdate { get; set; } = "—";
         public string Rating { get; set; } = "—";
+        public long DownloadCountValue { get; set; }
+        public long FileSizeBytes { get; set; }
+        public long PublishedUnixTime { get; set; }
         public string RepositoryId { get; set; } = "";
         public string ResourceUrl { get; set; } = "";
         public List<string> GalleryImages { get; set; } =
