@@ -185,6 +185,53 @@
             </Setter>
         </Style>
 
+        <Style x:Key="DarkComboBoxItemStyle"
+               TargetType="ComboBoxItem">
+            <Setter Property="Foreground"
+                    Value="#F2F4F8"/>
+            <Setter Property="Background"
+                    Value="#1C2028"/>
+            <Setter Property="Padding"
+                    Value="10,8"/>
+            <Setter Property="HorizontalContentAlignment"
+                    Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ComboBoxItem">
+                        <Border x:Name="ItemBorder"
+                                Background="{TemplateBinding Background}"
+                                Padding="{TemplateBinding Padding}"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"/>
+                        </Border>
+
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsHighlighted"
+                                     Value="True">
+                                <Setter TargetName="ItemBorder"
+                                        Property="Background"
+                                        Value="#2A3040"/>
+                            </Trigger>
+
+                            <Trigger Property="IsSelected"
+                                     Value="True">
+                                <Setter TargetName="ItemBorder"
+                                        Property="Background"
+                                        Value="#34305C"/>
+                            </Trigger>
+
+                            <Trigger Property="IsEnabled"
+                                     Value="False">
+                                <Setter Property="Opacity"
+                                        Value="0.45"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style TargetType="ScrollBar">
             <Setter Property="Background"
                     Value="#171A21"/>
@@ -338,19 +385,9 @@
                                   Foreground="#F2F4F8"
                                   BorderThickness="0"
                                   Padding="8,6"
+                                  ItemContainerStyle="{StaticResource DarkComboBoxItemStyle}"
                                   SelectedIndex="0"
                                   SelectionChanged="LanguageComboBox_SelectionChanged">
-
-                            <ComboBox.Resources>
-                                <Style TargetType="ComboBoxItem">
-                                    <Setter Property="Background"
-                                            Value="#1C2028"/>
-                                    <Setter Property="Foreground"
-                                            Value="#F2F4F8"/>
-                                    <Setter Property="Padding"
-                                            Value="10,7"/>
-                                </Style>
-                            </ComboBox.Resources>
 
                             <ComboBoxItem Content="Polski"
                                           Tag="pl"/>
@@ -658,19 +695,9 @@
                               BorderThickness="0"
                               Padding="9,6"
                               FontSize="13"
+                              ItemContainerStyle="{StaticResource DarkComboBoxItemStyle}"
                               SelectedIndex="0"
                               SelectionChanged="CatalogSortComboBox_SelectionChanged">
-
-                        <ComboBox.Resources>
-                            <Style TargetType="ComboBoxItem">
-                                <Setter Property="Background"
-                                        Value="#1C2028"/>
-                                <Setter Property="Foreground"
-                                        Value="#F2F4F8"/>
-                                <Setter Property="Padding"
-                                        Value="10,7"/>
-                            </Style>
-                        </ComboBox.Resources>
 
                         <ComboBoxItem Content="Data publikacji — najnowsze"
                                       Tag="date"/>
