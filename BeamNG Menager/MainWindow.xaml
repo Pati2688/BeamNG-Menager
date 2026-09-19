@@ -3,7 +3,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="BeamNG Mod Manager"
         Height="760"
-        Width="1550"
+        Width="1400"
         WindowStartupLocation="CenterScreen">
 
     <Grid Margin="20">
@@ -81,14 +81,6 @@
 
                 <DataGridTextColumn Header="Wersja moda"
                                     Binding="{Binding ModVersion}"
-                                    Width="120"/>
-
-                <DataGridTextColumn Header="ID Repo"
-                                    Binding="{Binding RepositoryId}"
-                                    Width="90"/>
-
-                <DataGridTextColumn Header="Data moda"
-                                    Binding="{Binding ReleaseDate}"
                                     Width="120"/>
 
                 <DataGridTextColumn Header="Aktualizacje"
