@@ -229,27 +229,48 @@ namespace BeamNGModManager
         private async Task EnhanceModHubCatalogAsync(
             List<CatalogMod> mods)
         {
-            IEnumerable<Task> tasks =
-                mods.Select(
-                    async mod =>
-                    {
-                        await catalogThumbnailSemaphore.WaitAsync();
+            // Nie pobieramy od razu stron szczegółów każdego moda.
+            // To wcześniej powodowało dziesiątki żądań i konwersji obrazów
+            // jednocześnie, co potrafiło zablokować interfejs WPF.
+            // Na liście pobieramy tylko miniaturę już znalezioną na stronie kategorii.
+            using SemaphoreSlim thumbnailLimit =
+                new SemaphoreSlim(3);
 
-                        try
+            Task[] tasks =
+                mods
+                    .Where(mod =>
+                        !string.IsNullOrWhiteSpace(
+                            mod.ThumbnailUrl))
+                    .Select(
+                        async mod =>
                         {
-                            await LoadModHubModDetailsAsync(
-                                mod);
-                        }
-                        catch
-                        {
-                            // Katalog nadal ma działać, nawet jeśli
-                            // pojedyncza karta ModHub chwilowo nie odpowiada.
-                        }
-                        finally
-                        {
-                            catalogThumbnailSemaphore.Release();
-                        }
-                    });
+                            await thumbnailLimit.WaitAsync();
+
+                            try
+                            {
+                                string cached =
+                                    await CacheRemoteImageAsync(
+                                        mod.ThumbnailUrl,
+                                        mod.ResourceUrl,
+                                        "modhub-thumbs");
+
+                                if (!string.IsNullOrWhiteSpace(
+                                    cached))
+                                {
+                                    mod.ThumbnailUrl =
+                                        cached;
+                                }
+                            }
+                            catch
+                            {
+                                // Brak miniatury nie może blokować katalogu.
+                            }
+                            finally
+                            {
+                                thumbnailLimit.Release();
+                            }
+                        })
+                    .ToArray();
 
             await Task.WhenAll(
                 tasks);
