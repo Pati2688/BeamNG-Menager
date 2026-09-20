@@ -2542,12 +2542,15 @@ namespace BeamNGModManager
                                 cacheDirectory,
                                 hash + ".png");
 
-                        using ImageSharpImage image =
-                            ImageSharpImage.Load(
-                                cachedFile);
+                        await Task.Run(() =>
+                        {
+                            using ImageSharpImage image =
+                                ImageSharpImage.Load(
+                                    cachedFile);
 
-                        image.SaveAsPng(
-                            convertedFile);
+                            image.SaveAsPng(
+                                convertedFile);
+                        });
 
                         try
                         {
@@ -2631,12 +2634,15 @@ namespace BeamNGModManager
                             cacheDirectory,
                             hash + ".png");
 
-                    using ImageSharpImage image =
-                        ImageSharpImage.Load(
-                            bytes);
+                    await Task.Run(() =>
+                    {
+                        using ImageSharpImage image =
+                            ImageSharpImage.Load(
+                                bytes);
 
-                    image.SaveAsPng(
-                        pngFile);
+                        image.SaveAsPng(
+                            pngFile);
+                    });
 
                     return new Uri(
                         pngFile)
@@ -2668,12 +2674,15 @@ namespace BeamNGModManager
                             cacheDirectory,
                             hash + ".png");
 
-                    using ImageSharpImage image =
-                        ImageSharpImage.Load(
-                            bytes);
+                    await Task.Run(() =>
+                    {
+                        using ImageSharpImage image =
+                            ImageSharpImage.Load(
+                                bytes);
 
-                    image.SaveAsPng(
-                        pngFile);
+                        image.SaveAsPng(
+                            pngFile);
+                    });
 
                     return new Uri(
                         pngFile)
