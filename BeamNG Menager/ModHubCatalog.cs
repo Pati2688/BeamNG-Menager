@@ -227,6 +227,35 @@ namespace BeamNGModManager
                 text.Substring(1);
         }
 
+        private async Task EnhanceModHubCatalogAsync(
+            List<CatalogMod> mods)
+        {
+            IEnumerable<Task> tasks =
+                mods.Select(
+                    async mod =>
+                    {
+                        await catalogThumbnailSemaphore.WaitAsync();
+
+                        try
+                        {
+                            await LoadModHubModDetailsAsync(
+                                mod);
+                        }
+                        catch
+                        {
+                            // Katalog nadal ma działać, nawet jeśli
+                            // pojedyncza karta ModHub chwilowo nie odpowiada.
+                        }
+                        finally
+                        {
+                            catalogThumbnailSemaphore.Release();
+                        }
+                    });
+
+            await Task.WhenAll(
+                tasks);
+        }
+
         private async Task LoadModHubModDetailsAsync(
             CatalogMod mod)
         {
