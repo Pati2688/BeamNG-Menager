@@ -4649,7 +4649,19 @@ namespace BeamNGModManager
         public string Author { get; set; } = "—";
         public string Category { get; set; } = "Repo";
         public string Description { get; set; } = "";
-        public string ThumbnailUrl { get; set; } = "";
+
+        private string? thumbnailUrl;
+
+        public string? ThumbnailUrl
+        {
+            get => thumbnailUrl;
+            set =>
+                thumbnailUrl =
+                    string.IsNullOrWhiteSpace(value)
+                        ? null
+                        : value;
+        }
+
         public string Version { get; set; } = "—";
         public string FileSize { get; set; } = "—";
         public string TotalDownloads { get; set; } = "—";
