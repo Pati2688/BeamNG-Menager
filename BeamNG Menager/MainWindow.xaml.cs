@@ -3805,8 +3805,16 @@ namespace BeamNGModManager
                         return formResponse;
                     }
 
+                    string diagnosticsFile =
+                        SaveModHubDownloadDiagnostics(
+                            html,
+                            responseUri);
+
                     throw new InvalidOperationException(
-                        "Nie znaleziono prawidłowego linku pobierania moda.");
+                        "Nie znaleziono prawidłowego linku pobierania moda. " +
+                        "Diagnostyka została skopiowana do schowka i zapisana tutaj: " +
+                        diagnosticsFile +
+                        ". Wklej jej zawartość do rozmowy przez Ctrl+V.");
                 }
 
                 response.Dispose();
