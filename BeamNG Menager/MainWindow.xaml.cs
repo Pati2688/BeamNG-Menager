@@ -3794,6 +3794,10 @@ namespace BeamNGModManager
             Uri baseUri,
             string source)
         {
+            string searchableHtml =
+                NormalizeDownloadMarkup(
+                    html);
+
             List<string> patterns =
                 new List<string>();
 
@@ -3820,17 +3824,34 @@ namespace BeamNGModManager
             }
             else if (source == "ModHub")
             {
-                // Najpierw szukamy prawdziwych zewnętrznych hostów plików.
-                // Wcześniej parser łapał np. /mod/download-photo/...,
-                // czyli miniaturę WebP zamiast archiwum.
+                string fileHosts =
+                    "(?:modsfire\\.com|mods\\.to|mediafire\\.com|sharemods\\.com|modsbase\\.com|workupload\\.com|pixeldrain\\.com|gofile\\.io|files\\.fm|dropbox\\.com|drive\\.google\\.com|mega\\.nz|beamngland\\.com|mods-game\\.wixsite\\.com)";
+
+                // Pełne, nagie lub protokołowo względne linki do hostingu.
                 patterns.Add(
-                    "(?<url>https?://(?:www\\.)?(?:modsfire\\.com|mods\\.to|mediafire\\.com|sharemods\\.com|modsbase\\.com|workupload\\.com|pixeldrain\\.com|gofile\\.io|files\\.fm|dropbox\\.com|drive\\.google\\.com|mega\\.nz)/[^\\s\\\"'<>\\\\]+)");
+                    "(?<url>https?://(?:www\\.)?" +
+                    fileHosts +
+                    "/[^\\s\\\"'<>\\\\]+)");
 
                 patterns.Add(
-                    "(?:href|data-href|data-url|data-download|value|action)=[\\\"'](?<url>https?://(?:www\\.)?(?:modsfire\\.com|mods\\.to|mediafire\\.com|sharemods\\.com|modsbase\\.com|workupload\\.com|pixeldrain\\.com|gofile\\.io|files\\.fm|dropbox\\.com|drive\\.google\\.com|mega\\.nz)/[^\\\"']+)[\\\"']");
+                    "(?<url>//(?:www\\.)?" +
+                    fileHosts +
+                    "/[^\\s\\\"'<>\\\\]+)");
 
                 patterns.Add(
-                    "(?:href|data-href|data-url|value|action)=[\\\"'](?<url>[^\\\"']+\\.zip(?:\\?[^\\\"']*)?)[\\\"']");
+                    "(?<url>(?:www\\.)?" +
+                    fileHosts +
+                    "/[A-Za-z0-9][^\\s\\\"'<>\\\\]*)");
+
+                // ModHub potrafi trzymać adres w data-*, value, onclick lub JS.
+                patterns.Add(
+                    "(?:href|value|action|onclick|data-[A-Za-z0-9_-]+)\\s*=\\s*[\\\"'][^\\\"']*?(?<url>https?://[^\\\"']+)[\\\"']");
+
+                patterns.Add(
+                    "[\\\"'](?:url|link|download|downloadUrl|download_url|directUrl|direct_url|fileUrl|file_url|target)[\\\"']\\s*[:=]\\s*[\\\"'](?<url>https?://[^\\\"']+)[\\\"']");
+
+                patterns.Add(
+                    "(?:href|data-[A-Za-z0-9_-]+|value|action)=[\\\"'](?<url>[^\\\"']+\\.zip(?:\\?[^\\\"']*)?)[\\\"']");
 
                 patterns.Add(
                     "<a\\b[^>]*href=[\\\"'](?<url>https?://[^\\\"']+)[\\\"'][^>]*>\\s*(?:<[^>]+>\\s*)*(?:Download|Direct Download|Pobierz)");
@@ -3840,9 +3861,12 @@ namespace BeamNGModManager
 
                 patterns.Add(
                     "<a\\b[^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*(?:class|id)=[\\\"'][^\\\"']*download[^\\\"']*[\\\"']");
+
+                // Wewnętrzne endpointy ModHub związane z pobieraniem/plikiem.
+                patterns.Add(
+                    "(?:href|action|data-[A-Za-z0-9_-]+)=[\\\"'](?<url>/(?:mod/)?(?:download|file|redirect|out|go)(?:[-_/][^\\\"']*)?)[\\\"']");
             }
 
-            // Typowe przyciski bez względu na hosting.
             patterns.Add(
                 "<a\\b[^>]*download(?:=[^>]*)?[^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"']");
 
@@ -3864,18 +3888,15 @@ namespace BeamNGModManager
             foreach (string pattern in patterns)
             {
                 foreach (Match match in Regex.Matches(
-                    html,
+                    searchableHtml,
                     pattern,
                     RegexOptions.IgnoreCase |
                     RegexOptions.Singleline))
                 {
                     string href =
-                        WebUtility.HtmlDecode(
-                            match.Groups["url"].Value)
-                        .Replace(
-                            "\\/",
-                            "/")
-                        .Trim();
+                        NormalizeExtractedDownloadUrl(
+                            match.Groups["url"].Value,
+                            baseUri);
 
                     if (string.IsNullOrWhiteSpace(href) ||
                         href.StartsWith(
@@ -3932,6 +3953,112 @@ namespace BeamNGModManager
             return null;
         }
 
+        private string NormalizeDownloadMarkup(
+            string html)
+        {
+            string normalized =
+                WebUtility.HtmlDecode(
+                    WebUtility.HtmlDecode(
+                        html));
+
+            normalized =
+                normalized
+                    .Replace(
+                        "\\/",
+                        "/")
+                    .Replace(
+                        "\\u002F",
+                        "/",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "\\u003A",
+                        ":",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "\\u003F",
+                        "?",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "\\u003D",
+                        "=",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "\\u0026",
+                        "&",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "\\x2F",
+                        "/",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "\\x3A",
+                        ":",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "%3A",
+                        ":",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "%2F",
+                        "/",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "%2E",
+                        ".",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "%3F",
+                        "?",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "%3D",
+                        "=",
+                        StringComparison.OrdinalIgnoreCase)
+                    .Replace(
+                        "%26",
+                        "&",
+                        StringComparison.OrdinalIgnoreCase);
+
+            return normalized;
+        }
+
+        private string NormalizeExtractedDownloadUrl(
+            string value,
+            Uri baseUri)
+        {
+            string href =
+                WebUtility.HtmlDecode(
+                    value)
+                .Replace(
+                    "\\/",
+                    "/")
+                .Trim()
+                .Trim(
+                    '\\',
+                    '"',
+                    '\'');
+
+            if (href.StartsWith(
+                "//",
+                StringComparison.Ordinal))
+            {
+                return baseUri.Scheme +
+                    ":" +
+                    href;
+            }
+
+            if (Regex.IsMatch(
+                href,
+                @"^(?:www\.)?(?:modsfire\.com|mods\.to|mediafire\.com|sharemods\.com|modsbase\.com|workupload\.com|pixeldrain\.com|gofile\.io|files\.fm|dropbox\.com|drive\.google\.com|mega\.nz|beamngland\.com|mods-game\.wixsite\.com)/",
+                RegexOptions.IgnoreCase))
+            {
+                return "https://" +
+                    href;
+            }
+
+            return href;
+        }
+
         private bool IsRejectedDownloadCandidate(
             Uri candidate,
             string source)
@@ -3956,7 +4083,6 @@ namespace BeamNGModManager
                 return true;
             }
 
-            // Nigdy nie traktujemy obrazów / endpointów zdjęć jako moda.
             if (path.Contains("/download-photo/") ||
                 path.Contains("/photo/") ||
                 path.Contains("/photos/") ||
@@ -3978,20 +4104,21 @@ namespace BeamNGModManager
                     "modhub.us",
                     StringComparison.OrdinalIgnoreCase))
             {
-                // W domenie ModHub akceptujemy tylko endpoint faktycznie
-                // związany z pobieraniem pliku, nie elementy galerii.
                 bool validInternalDownload =
-                    path.Equals(
-                        "/mod/download",
+                    path.Contains(
+                        "download",
                         StringComparison.OrdinalIgnoreCase) ||
-                    path.StartsWith(
-                        "/mod/download/",
+                    path.Contains(
+                        "/file",
                         StringComparison.OrdinalIgnoreCase) ||
-                    path.Equals(
-                        "/download",
+                    path.Contains(
+                        "/redirect",
                         StringComparison.OrdinalIgnoreCase) ||
-                    path.StartsWith(
-                        "/download/",
+                    path.Contains(
+                        "/out",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    path.Contains(
+                        "/go",
                         StringComparison.OrdinalIgnoreCase);
 
                 if (!validInternalDownload)
