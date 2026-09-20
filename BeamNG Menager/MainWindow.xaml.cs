@@ -1393,6 +1393,7 @@ namespace BeamNGModManager
             RefreshCatalogButton.IsEnabled = false;
             DownloadModsButton.IsEnabled = false;
             CatalogSortComboBox.IsEnabled = false;
+            CatalogSourceComboBox.IsEnabled = false;
             isCatalogPageLoading = true;
             hasMoreCatalogPages = true;
             currentCatalogPage = 0;
@@ -1448,6 +1449,7 @@ namespace BeamNGModManager
                 RefreshCatalogButton.IsEnabled = true;
                 DownloadModsButton.IsEnabled = true;
                 CatalogSortComboBox.IsEnabled = true;
+                CatalogSourceComboBox.IsEnabled = true;
             }
         }
 
@@ -1461,6 +1463,7 @@ namespace BeamNGModManager
 
             isCatalogPageLoading = true;
             CatalogSortComboBox.IsEnabled = false;
+            CatalogSourceComboBox.IsEnabled = false;
 
             int nextPage =
                 currentCatalogPage + 1;
@@ -1536,6 +1539,7 @@ namespace BeamNGModManager
             {
                 isCatalogPageLoading = false;
                 CatalogSortComboBox.IsEnabled = true;
+                CatalogSourceComboBox.IsEnabled = true;
             }
         }
 
