@@ -32,6 +32,12 @@ namespace BeamNGModManager
                 return;
             }
 
+            if (currentCatalogSource == "modhub")
+            {
+                ApplyCatalogSearch();
+                return;
+            }
+
             if (mode == "size")
             {
                 ApplyCatalogSearch();
