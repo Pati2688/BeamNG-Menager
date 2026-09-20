@@ -4084,7 +4084,13 @@ namespace BeamNGModManager
                 host.Contains("instagram.com") ||
                 host.Contains("twitter.com") ||
                 host.Contains("x.com") ||
-                host.Contains("tiktok.com"))
+                host.Contains("tiktok.com") ||
+                host.Equals(
+                    "accounts.google.com",
+                    StringComparison.OrdinalIgnoreCase) ||
+                host.Equals(
+                    "www.google.com",
+                    StringComparison.OrdinalIgnoreCase))
             {
                 return true;
             }
