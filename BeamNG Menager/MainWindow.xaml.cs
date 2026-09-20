@@ -3769,6 +3769,25 @@ namespace BeamNGModManager
                         responseUri,
                         source);
 
+                if (nextUri == null &&
+                    source == "ModHub")
+                {
+                    response.Dispose();
+
+                    HttpResponseMessage? formResponse =
+                        await TrySubmitModHubDownloadFormAsync(
+                            html,
+                            responseUri);
+
+                    if (formResponse != null)
+                    {
+                        return formResponse;
+                    }
+
+                    throw new InvalidOperationException(
+                        "Nie znaleziono prawidłowego linku pobierania moda.");
+                }
+
                 response.Dispose();
 
                 if (nextUri == null ||
