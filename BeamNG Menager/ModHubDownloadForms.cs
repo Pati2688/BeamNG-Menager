@@ -92,7 +92,10 @@ namespace BeamNGModManager
                     method = "get";
                 }
 
-                List<KeyValuePair<string, string>> fields =
+                List<KeyValuePair<string, string>> commonFields =
+                    new List<KeyValuePair<string, string>>();
+
+                List<KeyValuePair<string, string>> submitFields =
                     new List<KeyValuePair<string, string>>();
 
                 Regex inputRegex =
@@ -122,6 +125,12 @@ namespace BeamNGModManager
                             inputAttrs,
                             "type");
 
+                    string value =
+                        WebUtility.HtmlDecode(
+                            GetModHubHtmlAttribute(
+                                inputAttrs,
+                                "value"));
+
                     if (type.Equals(
                         "file",
                         StringComparison.OrdinalIgnoreCase))
@@ -129,101 +138,183 @@ namespace BeamNGModManager
                         continue;
                     }
 
-                    string value =
-                        WebUtility.HtmlDecode(
-                            GetModHubHtmlAttribute(
-                                inputAttrs,
-                                "value"));
+                    if (type.Equals(
+                            "submit",
+                            StringComparison.OrdinalIgnoreCase) ||
+                        type.Equals(
+                            "button",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        submitFields.Add(
+                            new KeyValuePair<string, string>(
+                                name,
+                                value));
 
-                    fields.Add(
+                        continue;
+                    }
+
+                    commonFields.Add(
                         new KeyValuePair<string, string>(
                             name,
                             value));
                 }
 
-                try
+                Regex buttonRegex =
+                    new Regex(
+                        "<button\\b(?<attrs>[^>]*)>(?<text>.*?)</button>",
+                        RegexOptions.IgnoreCase |
+                        RegexOptions.Singleline);
+
+                foreach (Match buttonMatch in buttonRegex.Matches(
+                    formMatch.Groups["body"].Value))
                 {
-                    using HttpRequestMessage request =
-                        BuildModHubFormRequest(
-                            actionUri,
-                            method,
-                            fields);
+                    string buttonAttrs =
+                        buttonMatch.Groups["attrs"].Value;
 
-                    request.Headers.Referrer =
-                        pageUri;
+                    string name =
+                        GetModHubHtmlAttribute(
+                            buttonAttrs,
+                            "name");
 
-                    HttpResponseMessage response =
-                        await downloadClient.SendAsync(
-                            request,
-                            HttpCompletionOption.ResponseHeadersRead);
-
-                    if (!response.IsSuccessStatusCode)
+                    if (string.IsNullOrWhiteSpace(name))
                     {
-                        response.Dispose();
                         continue;
                     }
 
-                    string? mediaType =
-                        response.Content.Headers
-                            .ContentType?
-                            .MediaType;
+                    string value =
+                        GetModHubHtmlAttribute(
+                            buttonAttrs,
+                            "value");
 
-                    string? disposition =
-                        response.Content.Headers
-                            .ContentDisposition?
-                            .DispositionType;
-
-                    bool isFile =
-                        (!string.IsNullOrWhiteSpace(disposition) &&
-                         disposition.Equals(
-                             "attachment",
-                             StringComparison.OrdinalIgnoreCase)) ||
-                        mediaType == "application/zip" ||
-                        mediaType == "application/x-zip-compressed" ||
-                        mediaType == "application/octet-stream";
-
-                    if (isFile)
+                    if (string.IsNullOrWhiteSpace(value))
                     {
-                        return response;
+                        value =
+                            Regex.Replace(
+                                buttonMatch.Groups["text"].Value,
+                                "<.*?>",
+                                "")
+                            .Trim();
                     }
 
-                    if (mediaType != null &&
-                        mediaType.Contains(
-                            "html",
-                            StringComparison.OrdinalIgnoreCase))
+                    submitFields.Add(
+                        new KeyValuePair<string, string>(
+                            name,
+                            WebUtility.HtmlDecode(value)));
+                }
+
+                List<List<KeyValuePair<string, string>>> attempts =
+                    new List<List<KeyValuePair<string, string>>>();
+
+                if (submitFields.Count == 0)
+                {
+                    attempts.Add(
+                        new List<KeyValuePair<string, string>>(
+                            commonFields));
+                }
+                else
+                {
+                    foreach (KeyValuePair<string, string> submitField
+                        in submitFields)
                     {
-                        string nextHtml =
-                            await response.Content
-                                .ReadAsStringAsync();
+                        List<KeyValuePair<string, string>> fields =
+                            new List<KeyValuePair<string, string>>(
+                                commonFields);
 
-                        Uri nextBase =
-                            response.RequestMessage?
-                                .RequestUri ??
-                            actionUri;
+                        fields.Add(
+                            submitField);
 
-                        Uri? nextUri =
-                            ExtractDownloadUriFromPage(
-                                nextHtml,
-                                nextBase,
-                                "ModHub");
+                        attempts.Add(
+                            fields);
+                    }
+                }
 
-                        response.Dispose();
+                foreach (List<KeyValuePair<string, string>> fields
+                    in attempts)
+                {
+                    try
+                    {
+                        using HttpRequestMessage request =
+                            BuildModHubFormRequest(
+                                actionUri,
+                                method,
+                                fields);
 
-                        if (nextUri != null)
+                        request.Headers.Referrer =
+                            pageUri;
+
+                        HttpResponseMessage response =
+                            await downloadClient.SendAsync(
+                                request,
+                                HttpCompletionOption.ResponseHeadersRead);
+
+                        if (!response.IsSuccessStatusCode)
                         {
-                            return await GetDownloadResponseAsync(
-                                nextUri,
-                                "ModHub");
+                            response.Dispose();
+                            continue;
                         }
 
-                        continue;
-                    }
+                        string? mediaType =
+                            response.Content.Headers
+                                .ContentType?
+                                .MediaType;
 
-                    response.Dispose();
-                }
-                catch
-                {
-                    // Próbujemy następnego formularza pobierania.
+                        string? disposition =
+                            response.Content.Headers
+                                .ContentDisposition?
+                                .DispositionType;
+
+                        bool isFile =
+                            (!string.IsNullOrWhiteSpace(disposition) &&
+                             disposition.Equals(
+                                 "attachment",
+                                 StringComparison.OrdinalIgnoreCase)) ||
+                            mediaType == "application/zip" ||
+                            mediaType == "application/x-zip-compressed" ||
+                            mediaType == "application/octet-stream";
+
+                        if (isFile)
+                        {
+                            return response;
+                        }
+
+                        if (mediaType != null &&
+                            mediaType.Contains(
+                                "html",
+                                StringComparison.OrdinalIgnoreCase))
+                        {
+                            string nextHtml =
+                                await response.Content
+                                    .ReadAsStringAsync();
+
+                            Uri nextBase =
+                                response.RequestMessage?
+                                    .RequestUri ??
+                                actionUri;
+
+                            Uri? nextUri =
+                                ExtractDownloadUriFromPage(
+                                    nextHtml,
+                                    nextBase,
+                                    "ModHub");
+
+                            response.Dispose();
+
+                            if (nextUri != null)
+                            {
+                                return await GetDownloadResponseAsync(
+                                    nextUri,
+                                    "ModHub");
+                            }
+
+                            continue;
+                        }
+
+                        response.Dispose();
+                    }
+                    catch
+                    {
+                        // Próbujemy następny przycisk / formularz.
+                    }
                 }
             }
 
