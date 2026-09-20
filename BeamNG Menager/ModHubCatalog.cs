@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
@@ -167,12 +166,12 @@ namespace BeamNGModManager
                         ResourceUrl = absoluteUrl,
                         InstallButtonText =
                             Localization.T(
-                                "Otwórz ModHub",
-                                "Open ModHub"),
+                                "Pobierz",
+                                "Download"),
                         InstallDetailButtonText =
                             Localization.T(
-                                "Otwórz stronę pobierania",
-                                "Open download page")
+                                "Pobierz i zainstaluj",
+                                "Download and install")
                     });
             }
 
@@ -318,38 +317,68 @@ namespace BeamNGModManager
                         " likes");
             }
 
-            string imageUrl =
+            Uri resourceUri =
+                new Uri(mod.ResourceUrl);
+
+            List<string> imageUrls =
+                ExtractModHubImageUrls(
+                    html,
+                    resourceUri);
+
+            string ogImage =
                 ExtractMetaContent(
                     html,
                     "og:image");
 
-            if (string.IsNullOrWhiteSpace(imageUrl))
+            if (!string.IsNullOrWhiteSpace(ogImage))
             {
-                imageUrl =
-                    ExtractThumbnailUrl(
-                        html,
-                        new Uri(mod.ResourceUrl));
+                try
+                {
+                    string absoluteOgImage =
+                        MakeAbsoluteUrl(
+                            ogImage,
+                            resourceUri);
+
+                    imageUrls.RemoveAll(url =>
+                        url.Equals(
+                            absoluteOgImage,
+                            StringComparison.OrdinalIgnoreCase));
+
+                    imageUrls.Insert(
+                        0,
+                        absoluteOgImage);
+                }
+                catch
+                {
+                }
             }
 
-            if (!string.IsNullOrWhiteSpace(imageUrl))
+            if (imageUrls.Count == 0)
             {
-                string cached =
-                    await CacheRemoteImageAsync(
-                        imageUrl,
-                        mod.ResourceUrl,
-                        "modhub");
+                string fallback =
+                    ExtractThumbnailUrl(
+                        html,
+                        resourceUri);
 
-                if (!string.IsNullOrWhiteSpace(cached))
+                if (!string.IsNullOrWhiteSpace(fallback))
                 {
-                    mod.ThumbnailUrl =
-                        cached;
-
-                    mod.GalleryImages =
-                        new List<string>
-                        {
-                            cached
-                        };
+                    imageUrls.Add(
+                        fallback);
                 }
+            }
+
+            List<string> cachedImages =
+                await CacheGalleryImagesAsync(
+                    imageUrls,
+                    mod.ResourceUrl);
+
+            if (cachedImages.Count > 0)
+            {
+                mod.ThumbnailUrl =
+                    cachedImages[0];
+
+                mod.GalleryImages =
+                    cachedImages;
             }
 
             string version =
@@ -379,15 +408,82 @@ namespace BeamNGModManager
                 : "—";
         }
 
-        private void OpenModHubPage(
-            CatalogMod mod)
+        private List<string> ExtractModHubImageUrls(
+            string html,
+            Uri baseUri)
         {
-            Process.Start(
-                new ProcessStartInfo
+            List<string> urls =
+                new List<string>();
+
+            Regex imageRegex =
+                new Regex(
+                    "<img\\b[^>]*(?:src|data-src|data-original|data-lazy-src)=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*>",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            foreach (Match match in imageRegex.Matches(html))
+            {
+                string value =
+                    WebUtility.HtmlDecode(
+                        match.Groups["url"].Value)
+                    .Trim();
+
+                string lower =
+                    value.ToLowerInvariant();
+
+                if (string.IsNullOrWhiteSpace(value) ||
+                    value.StartsWith(
+                        "data:",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    lower.Contains("logo") ||
+                    lower.Contains("favicon") ||
+                    lower.Contains("avatar") ||
+                    lower.Contains("icon") ||
+                    lower.Contains("flag") ||
+                    lower.Contains("banner") ||
+                    lower.Contains("placeholder") ||
+                    lower.Contains("yandex") ||
+                    lower.Contains("google") ||
+                    lower.Contains("doubleclick") ||
+                    lower.Contains("/ads/"))
                 {
-                    FileName = mod.ResourceUrl,
-                    UseShellExecute = true
-                });
+                    continue;
+                }
+
+                bool looksLikeImage =
+                    Regex.IsMatch(
+                        lower,
+                        @"\\.(?:jpg|jpeg|png|webp)(?:\\?|$)",
+                        RegexOptions.IgnoreCase);
+
+                if (!looksLikeImage)
+                {
+                    continue;
+                }
+
+                try
+                {
+                    string absolute =
+                        MakeAbsoluteUrl(
+                            value,
+                            baseUri);
+
+                    if (!urls.Contains(
+                        absolute,
+                        StringComparer.OrdinalIgnoreCase))
+                    {
+                        urls.Add(
+                            absolute);
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return urls
+                .Take(12)
+                .ToList();
         }
     }
 }
