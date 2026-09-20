@@ -3304,6 +3304,10 @@ namespace BeamNGModManager
                         "Nie udało się pobrać poprawnego archiwum ZIP.");
                 }
 
+                await ScanDownloadedModSecurityAsync(
+                    validTempFile,
+                    mod.Title);
+
                 string modType =
                     DetectModType(validTempFile);
 
@@ -3724,7 +3728,7 @@ namespace BeamNGModManager
             return fileName;
         }
 
-        private void InstallModButton_Click(
+        private async void InstallModButton_Click(
             object sender,
             RoutedEventArgs e)
         {
@@ -3752,6 +3756,12 @@ namespace BeamNGModManager
 
             string sourceFile =
                 dialog.FileName;
+
+            if (!await ScanLocalModSecurityAsync(
+                sourceFile))
+            {
+                return;
+            }
 
             string zipStatus =
                 CheckZip(sourceFile);
