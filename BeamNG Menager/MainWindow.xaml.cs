@@ -3368,7 +3368,10 @@ namespace BeamNGModManager
                         recoveryUri;
 
                     CatalogStatusText.Text =
-                        "Repo zwróciło stronę pośrednią. Próba pobrania właściwego ZIP...";
+                        mod.Source +
+                        Localization.T(
+                            " zwrócił stronę pośrednią. Próba pobrania właściwego ZIP...",
+                            " returned an intermediate page. Trying to fetch the actual ZIP...");
                 }
 
                 if (string.IsNullOrWhiteSpace(validTempFile) ||
