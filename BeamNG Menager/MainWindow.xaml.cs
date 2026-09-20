@@ -3333,9 +3333,15 @@ namespace BeamNGModManager
                     attempt++)
                 {
                     using HttpResponseMessage response =
-                        await GetDownloadResponseAsync(
-                            currentUri,
-                            mod.Source);
+                        mod.Source.Equals(
+                            "ModHub",
+                            StringComparison.OrdinalIgnoreCase) &&
+                        attempt == 0
+                            ? await GetInitialModHubDownloadResponseAsync(
+                                mod)
+                            : await GetDownloadResponseAsync(
+                                currentUri,
+                                mod.Source);
 
                     response.EnsureSuccessStatusCode();
 
@@ -3671,6 +3677,56 @@ namespace BeamNGModManager
             }
 
             return null;
+        }
+
+        private async Task<HttpResponseMessage> GetInitialModHubDownloadResponseAsync(
+            CatalogMod mod)
+        {
+            Uri resourceUri =
+                new Uri(
+                    mod.ResourceUrl);
+
+            // Do odczytu strony moda używamy tego samego klienta,
+            // który poprawnie ładuje szczegóły i miniatury ModHub.
+            // Osobny klient pobierania bywa przez ModHub przekierowywany
+            // na stronę główną jeszcze przed odczytaniem przycisków pliku.
+            string html =
+                await httpClient.GetStringAsync(
+                    resourceUri);
+
+            HttpResponseMessage? formResponse =
+                await TrySubmitModHubDownloadFormAsync(
+                    html,
+                    resourceUri);
+
+            if (formResponse != null)
+            {
+                return formResponse;
+            }
+
+            Uri? directUri =
+                ExtractDownloadUriFromPage(
+                    html,
+                    resourceUri,
+                    "ModHub");
+
+            if (directUri != null)
+            {
+                return await GetDownloadResponseAsync(
+                    directUri,
+                    "ModHub");
+            }
+
+            string diagnosticsFile =
+                SaveModHubDownloadDiagnostics(
+                    html,
+                    resourceUri);
+
+            throw new InvalidOperationException(
+                "Nie znaleziono prawidłowego linku pobierania moda. " +
+                "Diagnostyka została skopiowana do schowka i zapisana tutaj: " +
+                diagnosticsFile +
+                ". Wklej jej zawartość do rozmowy przez Ctrl+V.");
         }
 
         private async Task<HttpResponseMessage> GetDownloadResponseAsync(
