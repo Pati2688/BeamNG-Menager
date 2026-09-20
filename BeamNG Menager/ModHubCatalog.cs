@@ -151,9 +151,19 @@ namespace BeamNGModManager
                         0);
 
                 string thumbnail =
-                    ExtractThumbnailUrl(
-                        nearby,
+                    ExtractClosestModHubPhoto(
+                        html,
+                        match.Index,
                         pageUri);
+
+                if (string.IsNullOrWhiteSpace(
+                    thumbnail))
+                {
+                    thumbnail =
+                        ExtractThumbnailUrl(
+                            nearby,
+                            pageUri);
+                }
 
                 result.Add(
                     new CatalogMod
@@ -177,6 +187,87 @@ namespace BeamNGModManager
             }
 
             return result;
+        }
+
+        private string ExtractClosestModHubPhoto(
+            string html,
+            int anchorIndex,
+            Uri baseUri)
+        {
+            Regex photoRegex =
+                new Regex(
+                    "(?<url>(?:https://www\\.modhub\\.us)?/uploads/images/photos/[^\\\"'<>\\s]+?\\.(?:webp|jpg|jpeg|png)(?:\\?[^\\\"'<>\\s]*)?)",
+                    RegexOptions.IgnoreCase);
+
+            Match? bestMatch =
+                null;
+
+            int bestDistance =
+                int.MaxValue;
+
+            foreach (Match imageMatch in photoRegex.Matches(
+                html))
+            {
+                int distance =
+                    Math.Abs(
+                        imageMatch.Index -
+                        anchorIndex);
+
+                if (distance > 6000)
+                {
+                    continue;
+                }
+
+                string candidate =
+                    WebUtility.HtmlDecode(
+                        imageMatch.Groups["url"].Value);
+
+                // Miniatury kart mają zwykle prefiks thumb_.
+                // Jeśli taki obraz jest blisko linku moda, traktujemy go priorytetowo.
+                bool isThumb =
+                    candidate.Contains(
+                        "/thumb_",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    candidate.Contains(
+                        "thumb_",
+                        StringComparison.OrdinalIgnoreCase);
+
+                int adjustedDistance =
+                    isThumb
+                        ? Math.Max(
+                            0,
+                            distance - 1500)
+                        : distance;
+
+                if (adjustedDistance >=
+                    bestDistance)
+                {
+                    continue;
+                }
+
+                bestDistance =
+                    adjustedDistance;
+
+                bestMatch =
+                    imageMatch;
+            }
+
+            if (bestMatch == null)
+            {
+                return "";
+            }
+
+            try
+            {
+                return MakeAbsoluteUrl(
+                    WebUtility.HtmlDecode(
+                        bestMatch.Groups["url"].Value),
+                    baseUri);
+            }
+            catch
+            {
+                return "";
+            }
         }
 
         private bool IsValidModHubTitle(
