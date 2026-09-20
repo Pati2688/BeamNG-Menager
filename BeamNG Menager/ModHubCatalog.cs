@@ -99,39 +99,84 @@ namespace BeamNGModManager
 
             Regex linkRegex =
                 new Regex(
-                    "href=[\\\"'](?<url>(?:https://www\\.modhub\\.us)?/beamng-drive-mods/(?<slug>[^\\\"'#?/<]+))/?[\\\"'][^>]*>(?<title>.*?)</a>",
+                    "<a\\b[^>]*href=[\\\"'](?<url>(?:https://www\\.modhub\\.us)?/beamng-drive-mods/(?<slug>[^\\\"'#?/<]+))/?[\\\"'][^>]*>(?<content>.*?)</a>",
                     RegexOptions.IgnoreCase |
                     RegexOptions.Singleline);
 
-            List<CatalogMod> result =
-                new List<CatalogMod>();
-
-            HashSet<string> seen =
-                new HashSet<string>(
+            Dictionary<string, List<Match>> matchesByUrl =
+                new Dictionary<string, List<Match>>(
                     StringComparer.OrdinalIgnoreCase);
 
             foreach (Match match in linkRegex.Matches(html))
             {
-                string absoluteUrl =
-                    MakeAbsoluteUrl(
-                        WebUtility.HtmlDecode(
-                            match.Groups["url"].Value),
-                        pageUri);
+                string absoluteUrl;
 
-                if (!seen.Add(absoluteUrl))
+                try
+                {
+                    absoluteUrl =
+                        MakeAbsoluteUrl(
+                            WebUtility.HtmlDecode(
+                                match.Groups["url"].Value),
+                            pageUri);
+                }
+                catch
                 {
                     continue;
                 }
 
+                if (!matchesByUrl.TryGetValue(
+                    absoluteUrl,
+                    out List<Match>? group))
+                {
+                    group =
+                        new List<Match>();
+
+                    matchesByUrl[absoluteUrl] =
+                        group;
+                }
+
+                group.Add(
+                    match);
+            }
+
+            List<CatalogMod> result =
+                new List<CatalogMod>();
+
+            foreach (KeyValuePair<string, List<Match>> item
+                in matchesByUrl)
+            {
+                List<Match> group =
+                    item.Value;
+
+                Match representative =
+                    group[0];
+
                 string title =
-                    StripHtml(
-                        match.Groups["title"].Value);
+                    group
+                        .Select(match =>
+                            StripHtml(
+                                match.Groups["content"].Value))
+                        .FirstOrDefault(
+                            IsValidModHubTitle) ??
+                    "";
+
+                if (!IsValidModHubTitle(title))
+                {
+                    title =
+                        group
+                            .Select(match =>
+                                ExtractModHubImageAlt(
+                                    match.Groups["content"].Value))
+                            .FirstOrDefault(
+                                IsValidModHubTitle) ??
+                        "";
+                }
 
                 if (!IsValidModHubTitle(title))
                 {
                     title =
                         HumanizeModHubSlug(
-                            match.Groups["slug"].Value);
+                            representative.Groups["slug"].Value);
                 }
 
                 if (!IsValidModHubTitle(title))
@@ -139,31 +184,33 @@ namespace BeamNGModManager
                     continue;
                 }
 
+                string thumbnail =
+                    group
+                        .Select(match =>
+                            ExtractModHubImageFromAnchor(
+                                match.Groups["content"].Value,
+                                pageUri))
+                        .FirstOrDefault(value =>
+                            !string.IsNullOrWhiteSpace(value)) ??
+                    "";
+
+                Match titleMatch =
+                    group.FirstOrDefault(match =>
+                        IsValidModHubTitle(
+                            StripHtml(
+                                match.Groups["content"].Value))) ??
+                    representative;
+
                 string nearby =
                     GetNearbyHtml(
                         html,
-                        match.Index,
+                        titleMatch.Index,
                         3200);
 
                 string description =
                     ExtractNearbyDescription(
                         nearby,
                         0);
-
-                string thumbnail =
-                    ExtractClosestModHubPhoto(
-                        html,
-                        match.Index,
-                        pageUri);
-
-                if (string.IsNullOrWhiteSpace(
-                    thumbnail))
-                {
-                    thumbnail =
-                        ExtractThumbnailUrl(
-                            nearby,
-                            pageUri);
-                }
 
                 result.Add(
                     new CatalogMod
@@ -174,7 +221,7 @@ namespace BeamNGModManager
                         Category = "BeamNG Drive Mods",
                         Description = description,
                         ThumbnailUrl = thumbnail,
-                        ResourceUrl = absoluteUrl,
+                        ResourceUrl = item.Key,
                         InstallButtonText =
                             Localization.T(
                                 "Pobierz",
@@ -187,6 +234,94 @@ namespace BeamNGModManager
             }
 
             return result;
+        }
+
+        private string ExtractModHubImageAlt(
+            string anchorContent)
+        {
+            Match altMatch =
+                Regex.Match(
+                    anchorContent,
+                    "<img\\b[^>]*\\balt=[\\\"'](?<alt>[^\\\"']+)[\\\"'][^>]*>",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            return altMatch.Success
+                ? WebUtility.HtmlDecode(
+                    altMatch.Groups["alt"].Value)
+                    .Trim()
+                : "";
+        }
+
+        private string ExtractModHubImageFromAnchor(
+            string anchorContent,
+            Uri baseUri)
+        {
+            Regex imageRegex =
+                new Regex(
+                    "<(?:img|source)\\b[^>]*(?:src|data-src|data-original|data-lazy-src|srcset|data-srcset)=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*>",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            foreach (Match imageMatch in imageRegex.Matches(
+                anchorContent))
+            {
+                string value =
+                    WebUtility.HtmlDecode(
+                        imageMatch.Groups["url"].Value)
+                    .Trim();
+
+                if (value.Contains(','))
+                {
+                    value =
+                        value.Split(',')[0]
+                            .Trim();
+                }
+
+                int descriptorSeparator =
+                    value.IndexOf(' ');
+
+                if (descriptorSeparator > 0)
+                {
+                    value =
+                        value.Substring(
+                            0,
+                            descriptorSeparator);
+                }
+
+                string lower =
+                    value.ToLowerInvariant();
+
+                bool validImage =
+                    lower.Contains("/mod/download-photo/") ||
+                    lower.Contains("/uploads/images/photos/") ||
+                    Regex.IsMatch(
+                        lower,
+                        @"\.(?:jpg|jpeg|png|webp)(?:\?|$)",
+                        RegexOptions.IgnoreCase);
+
+                if (!validImage ||
+                    lower.Contains("avatar") ||
+                    lower.Contains("profile") ||
+                    lower.Contains("placeholder") ||
+                    lower.Contains("logo") ||
+                    lower.Contains("icon"))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    return MakeAbsoluteUrl(
+                        value,
+                        baseUri);
+                }
+                catch
+                {
+                }
+            }
+
+            return "";
         }
 
         private string ExtractClosestModHubPhoto(
