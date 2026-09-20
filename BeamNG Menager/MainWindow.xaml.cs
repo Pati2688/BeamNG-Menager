@@ -3646,10 +3646,20 @@ namespace BeamNGModManager
 
                     try
                     {
-                        return new Uri(
-                            MakeAbsoluteUrl(
-                                value,
-                                baseUri));
+                        Uri candidate =
+                            new Uri(
+                                MakeAbsoluteUrl(
+                                    value,
+                                    baseUri));
+
+                        if (IsRejectedDownloadCandidate(
+                            candidate,
+                            source))
+                        {
+                            continue;
+                        }
+
+                        return candidate;
                     }
                     catch
                     {
@@ -3810,23 +3820,26 @@ namespace BeamNGModManager
             }
             else if (source == "ModHub")
             {
-                // ModHub często przekazuje plik do zewnętrznego hostingu.
-                // Najpierw szukamy odnośników oznaczonych jako pobieranie.
+                // Najpierw szukamy prawdziwych zewnętrznych hostów plików.
+                // Wcześniej parser łapał np. /mod/download-photo/...,
+                // czyli miniaturę WebP zamiast archiwum.
+                patterns.Add(
+                    "(?<url>https?://(?:www\\.)?(?:modsfire\\.com|mods\\.to|mediafire\\.com|sharemods\\.com|modsbase\\.com|workupload\\.com|pixeldrain\\.com|gofile\\.io|files\\.fm|dropbox\\.com|drive\\.google\\.com|mega\\.nz)/[^\\s\\\"'<>\\\\]+)");
+
+                patterns.Add(
+                    "(?:href|data-href|data-url|data-download|value|action)=[\\\"'](?<url>https?://(?:www\\.)?(?:modsfire\\.com|mods\\.to|mediafire\\.com|sharemods\\.com|modsbase\\.com|workupload\\.com|pixeldrain\\.com|gofile\\.io|files\\.fm|dropbox\\.com|drive\\.google\\.com|mega\\.nz)/[^\\\"']+)[\\\"']");
+
+                patterns.Add(
+                    "(?:href|data-href|data-url|value|action)=[\\\"'](?<url>[^\\\"']+\\.zip(?:\\?[^\\\"']*)?)[\\\"']");
+
+                patterns.Add(
+                    "<a\\b[^>]*href=[\\\"'](?<url>https?://[^\\\"']+)[\\\"'][^>]*>\\s*(?:<[^>]+>\\s*)*(?:Download|Direct Download|Pobierz)");
+
                 patterns.Add(
                     "<a\\b[^>]*(?:class|id)=[\\\"'][^\\\"']*download[^\\\"']*[\\\"'][^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"']");
 
                 patterns.Add(
                     "<a\\b[^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*(?:class|id)=[\\\"'][^\\\"']*download[^\\\"']*[\\\"']");
-
-                patterns.Add(
-                    "<a\\b[^>]*href=[\\\"'](?<url>https?://[^\\\"']+)[\\\"'][^>]*>\\s*(?:<[^>]+>\\s*)*(?:Download|Direct Download|Pobierz)");
-
-                // Popularne zewnętrzne hostingi spotykane na stronach z modami.
-                patterns.Add(
-                    "(?:href|data-href|data-url|data-download|value|action)=[\\\"'](?<url>https?://(?:www\\.)?(?:modsfire\\.com|mediafire\\.com|sharemods\\.com|modsbase\\.com|workupload\\.com|pixeldrain\\.com|gofile\\.io|files\\.fm|dropbox\\.com|drive\\.google\\.com|mega\\.nz)/[^\\\"']+)[\\\"']");
-
-                patterns.Add(
-                    "(?<url>https?://(?:www\\.)?(?:modsfire\\.com|mediafire\\.com|sharemods\\.com|modsbase\\.com|workupload\\.com|pixeldrain\\.com|gofile\\.io|files\\.fm|dropbox\\.com|drive\\.google\\.com|mega\\.nz)/[^\\s\\\"'<>\\\\]+)");
             }
 
             // Typowe przyciski bez względu na hosting.
@@ -3839,11 +3852,9 @@ namespace BeamNGModManager
             patterns.Add(
                 "(?:href|data-href|data-url|data-download|action)=[\\\"'](?<url>[^\\\"']*(?:/download(?:/|\\?|$)|/downloads/)[^\\\"']*)[\\\"']");
 
-            // Bezpośredni ZIP ma najwyższą wartość, jeśli pojawia się na stronie hostingu.
             patterns.Add(
                 "(?:href|data-href|data-url|value|action)=[\\\"'](?<url>[^\\\"']+\\.zip(?:\\?[^\\\"']*)?)[\\\"']");
 
-            // Linki generowane przez skrypty / JSON.
             patterns.Add(
                 "[\\\"'](?:downloadUrl|download_url|directUrl|direct_url|fileUrl|file_url)[\\\"']\\s*:\\s*[\\\"'](?<url>https?://[^\\\"']+)[\\\"']");
 
@@ -3906,23 +3917,10 @@ namespace BeamNGModManager
                         }
                     }
 
-                    if (candidate == baseUri)
-                    {
-                        continue;
-                    }
-
-                    string host =
-                        candidate.Host
-                            .ToLowerInvariant();
-
-                    if (host.Contains("doubleclick") ||
-                        host.Contains("googlesyndication") ||
-                        host.Contains("googleadservices") ||
-                        host.Contains("facebook.com") ||
-                        host.Contains("instagram.com") ||
-                        host.Contains("twitter.com") ||
-                        host.Contains("x.com") ||
-                        host.Contains("tiktok.com"))
+                    if (candidate == baseUri ||
+                        IsRejectedDownloadCandidate(
+                            candidate,
+                            source))
                     {
                         continue;
                     }
@@ -3932,6 +3930,77 @@ namespace BeamNGModManager
             }
 
             return null;
+        }
+
+        private bool IsRejectedDownloadCandidate(
+            Uri candidate,
+            string source)
+        {
+            string host =
+                candidate.Host
+                    .ToLowerInvariant();
+
+            string path =
+                candidate.AbsolutePath
+                    .ToLowerInvariant();
+
+            if (host.Contains("doubleclick") ||
+                host.Contains("googlesyndication") ||
+                host.Contains("googleadservices") ||
+                host.Contains("facebook.com") ||
+                host.Contains("instagram.com") ||
+                host.Contains("twitter.com") ||
+                host.Contains("x.com") ||
+                host.Contains("tiktok.com"))
+            {
+                return true;
+            }
+
+            // Nigdy nie traktujemy obrazów / endpointów zdjęć jako moda.
+            if (path.Contains("/download-photo/") ||
+                path.Contains("/photo/") ||
+                path.Contains("/photos/") ||
+                path.Contains("/image/") ||
+                path.Contains("/images/") ||
+                path.Contains("/uploads/images/") ||
+                path.EndsWith(".webp") ||
+                path.EndsWith(".jpg") ||
+                path.EndsWith(".jpeg") ||
+                path.EndsWith(".png") ||
+                path.EndsWith(".gif") ||
+                path.EndsWith(".svg"))
+            {
+                return true;
+            }
+
+            if (source == "ModHub" &&
+                host.EndsWith(
+                    "modhub.us",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                // W domenie ModHub akceptujemy tylko endpoint faktycznie
+                // związany z pobieraniem pliku, nie elementy galerii.
+                bool validInternalDownload =
+                    path.Equals(
+                        "/mod/download",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    path.StartsWith(
+                        "/mod/download/",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    path.Equals(
+                        "/download",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    path.StartsWith(
+                        "/download/",
+                        StringComparison.OrdinalIgnoreCase);
+
+                if (!validInternalDownload)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private string GetDownloadedFileName(
