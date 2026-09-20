@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using SixLabors.ImageSharp;
 using ImageSharpImage = SixLabors.ImageSharp.Image;
 using System;
 using System.Collections.Generic;
