@@ -70,9 +70,14 @@ namespace BeamNGModManager
                     continue;
                 }
 
-                if (IsRejectedDownloadCandidate(
-                    actionUri,
-                    "ModHub"))
+                bool postsBackToCurrentPage =
+                    actionUri.Equals(
+                        pageUri);
+
+                if (!postsBackToCurrentPage &&
+                    IsRejectedDownloadCandidate(
+                        actionUri,
+                        "ModHub"))
                 {
                     continue;
                 }
@@ -276,12 +281,15 @@ namespace BeamNGModManager
             string attributes,
             string name)
         {
+            string pattern =
+                "\\b" +
+                Regex.Escape(name) +
+                "\\s*=\\s*(?:[\\\"'](?<value>.*?)[\\\"']|(?<value>[^\\s>]+))";
+
             Match match =
                 Regex.Match(
                     attributes,
-                    @"\\b" +
-                    Regex.Escape(name) +
-                    @"\\s*=\\s*(?:[\""'](?<value>.*?)[\""']|(?<value>[^\\s>]+))",
+                    pattern,
                     RegexOptions.IgnoreCase |
                     RegexOptions.Singleline);
 
