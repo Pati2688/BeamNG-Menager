@@ -453,7 +453,7 @@ namespace BeamNGModManager
                 bool looksLikeImage =
                     Regex.IsMatch(
                         lower,
-                        @"\\.(?:jpg|jpeg|png|webp)(?:\\?|$)",
+                        @"\.(?:jpg|jpeg|png|webp)(?:\?|$)",
                         RegexOptions.IgnoreCase);
 
                 if (!looksLikeImage)
