@@ -3682,22 +3682,46 @@ namespace BeamNGModManager
         private async Task<HttpResponseMessage> GetInitialModHubDownloadResponseAsync(
             CatalogMod mod)
         {
+            string resolvedUrl =
+                ResolveModHubResourceUrl(
+                    mod);
+
+            mod.ResourceUrl =
+                resolvedUrl;
+
             Uri resourceUri =
                 new Uri(
-                    mod.ResourceUrl);
+                    resolvedUrl);
 
-            // Do odczytu strony moda używamy tego samego klienta,
-            // który poprawnie ładuje szczegóły i miniatury ModHub.
-            // Osobny klient pobierania bywa przez ModHub przekierowywany
-            // na stronę główną jeszcze przed odczytaniem przycisków pliku.
-            string html =
-                await httpClient.GetStringAsync(
+            using HttpRequestMessage request =
+                new HttpRequestMessage(
+                    HttpMethod.Get,
                     resourceUri);
+
+            request.Headers.Referrer =
+                new Uri(
+                    "https://www.modhub.us/category/beamng-drive-mods");
+
+            using HttpResponseMessage pageResponse =
+                await httpClient.SendAsync(
+                    request,
+                    HttpCompletionOption.ResponseContentRead);
+
+            pageResponse.EnsureSuccessStatusCode();
+
+            string html =
+                await pageResponse.Content
+                    .ReadAsStringAsync();
+
+            Uri effectiveUri =
+                pageResponse.RequestMessage?
+                    .RequestUri ??
+                resourceUri;
 
             HttpResponseMessage? formResponse =
                 await TrySubmitModHubDownloadFormAsync(
                     html,
-                    resourceUri);
+                    effectiveUri);
 
             if (formResponse != null)
             {
@@ -3707,7 +3731,7 @@ namespace BeamNGModManager
             Uri? directUri =
                 ExtractDownloadUriFromPage(
                     html,
-                    resourceUri,
+                    effectiveUri,
                     "ModHub");
 
             if (directUri != null)
@@ -3720,11 +3744,15 @@ namespace BeamNGModManager
             string diagnosticsFile =
                 SaveModHubDownloadDiagnostics(
                     html,
-                    resourceUri);
+                    effectiveUri);
 
             throw new InvalidOperationException(
                 "Nie znaleziono prawidłowego linku pobierania moda. " +
-                "Diagnostyka została skopiowana do schowka i zapisana tutaj: " +
+                "Sprawdzany adres: " +
+                resolvedUrl +
+                ". Adres odpowiedzi: " +
+                effectiveUri +
+                ". Diagnostyka została skopiowana do schowka i zapisana tutaj: " +
                 diagnosticsFile +
                 ". Wklej jej zawartość do rozmowy przez Ctrl+V.");
         }
