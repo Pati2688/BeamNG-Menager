@@ -1055,8 +1055,18 @@ namespace BeamNGModManager
 
                 try
                 {
-                    await LoadBeamNgModDetailsAsync(
-                        mod);
+                    if (mod.Source.Equals(
+                        "ModHub",
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        await LoadModHubModDetailsAsync(
+                            mod);
+                    }
+                    else
+                    {
+                        await LoadBeamNgModDetailsAsync(
+                            mod);
+                    }
                 }
                 catch
                 {
@@ -1133,6 +1143,32 @@ namespace BeamNGModManager
 
                 catalogMod.IsInstalled =
                     installed;
+
+                if (catalogMod.Source.Equals(
+                    "ModHub",
+                    StringComparison.OrdinalIgnoreCase))
+                {
+                    catalogMod.InstallButtonText =
+                        Localization.T(
+                            "Otwórz ModHub",
+                            "Open ModHub");
+
+                    catalogMod.InstallDetailButtonText =
+                        Localization.T(
+                            "Otwórz stronę pobierania",
+                            "Open download page");
+
+                    catalogMod.CanInstall = true;
+
+                    catalogMod.InstallationStatus =
+                        installed
+                            ? Localization.T(
+                                "Zainstalowany",
+                                "Installed")
+                            : "";
+
+                    continue;
+                }
 
                 catalogMod.InstallButtonText =
                     installed
@@ -1322,7 +1358,8 @@ namespace BeamNGModManager
                 CatalogStatusText.Text =
                     "Gotowe: " +
                     catalogMods.Count +
-                    " modów z Repo BeamNG" +
+                    " modów z " +
+                    CurrentCatalogSourceName +
                     sortInfo +
                     ".";
             }
@@ -1361,12 +1398,16 @@ namespace BeamNGModManager
             currentCatalogPage = 0;
 
             CatalogStatusText.Text =
-                "Pobieranie pierwszej strony Repo BeamNG...";
+                Localization.T(
+                    "Pobieranie pierwszej strony ",
+                    "Loading first page of ") +
+                CurrentCatalogSourceName +
+                "...";
 
             try
             {
                 List<CatalogMod> firstPage =
-                    await LoadBeamNgCatalogPageAsync(1);
+                    await LoadSelectedCatalogPageAsync(1);
 
                 catalogMods =
                     firstPage
@@ -1394,7 +1435,11 @@ namespace BeamNGModManager
             catch (Exception ex)
             {
                 CatalogStatusText.Text =
-                    "Nie udało się wczytać Repo BeamNG: " +
+                    Localization.T(
+                        "Nie udało się wczytać ",
+                        "Could not load ") +
+                    CurrentCatalogSourceName +
+                    ": " +
                     ex.Message;
             }
             finally
@@ -1421,14 +1466,18 @@ namespace BeamNGModManager
                 currentCatalogPage + 1;
 
             CatalogStatusText.Text =
-                "Doczytywanie strony " +
+                Localization.T(
+                    "Doczytywanie strony ",
+                    "Loading page ") +
                 nextPage +
-                " Repo BeamNG...";
+                " — " +
+                CurrentCatalogSourceName +
+                "...";
 
             try
             {
                 List<CatalogMod> pageMods =
-                    await LoadBeamNgCatalogPageAsync(
+                    await LoadSelectedCatalogPageAsync(
                         nextPage);
 
                 HashSet<string> existingUrls =
@@ -1495,8 +1544,19 @@ namespace BeamNGModManager
         {
             try
             {
-                await CacheCatalogThumbnailsAsync(
-                    mods);
+                if (mods.Any(mod =>
+                    mod.Source.Equals(
+                        "ModHub",
+                        StringComparison.OrdinalIgnoreCase)))
+                {
+                    await EnhanceModHubCatalogAsync(
+                        mods);
+                }
+                else
+                {
+                    await CacheCatalogThumbnailsAsync(
+                        mods);
+                }
 
                 ApplyCatalogSearch();
             }
@@ -3052,6 +3112,33 @@ namespace BeamNGModManager
             if (sender is not System.Windows.Controls.Button button ||
                 button.DataContext is not CatalogMod mod)
             {
+                return;
+            }
+
+            if (mod.Source.Equals(
+                "ModHub",
+                StringComparison.OrdinalIgnoreCase))
+            {
+                try
+                {
+                    OpenModHubPage(
+                        mod);
+
+                    CatalogStatusText.Text =
+                        Localization.T(
+                            "Otwarto stronę pobierania w ModHub: ",
+                            "Opened ModHub download page: ") +
+                        mod.Title;
+                }
+                catch (Exception ex)
+                {
+                    CatalogStatusText.Text =
+                        Localization.T(
+                            "Nie udało się otworzyć ModHub: ",
+                            "Could not open ModHub: ") +
+                        ex.Message;
+                }
+
                 return;
             }
 
