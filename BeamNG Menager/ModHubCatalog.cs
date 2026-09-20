@@ -358,6 +358,34 @@ namespace BeamNGModManager
         private async Task LoadModHubThumbnailAsync(
             CatalogMod mod)
         {
+            string originalThumbnail =
+                mod.ThumbnailUrl ?? "";
+
+            // Miniatura z listy kategorii pojawia się od razu i w wielu
+            // przypadkach jest już właściwym zdjęciem moda. Nie nadpisujemy
+            // jej później przypadkowym avatarem lub placeholderem ze strony
+            // szczegółów.
+            if (!string.IsNullOrWhiteSpace(
+                    originalThumbnail) &&
+                IsModHubPhotoUrl(
+                    originalThumbnail))
+            {
+                string cachedOriginal =
+                    await CacheRemoteImageAsync(
+                        originalThumbnail,
+                        mod.ResourceUrl,
+                        "modhub-thumbs");
+
+                if (!string.IsNullOrWhiteSpace(
+                    cachedOriginal))
+                {
+                    mod.ThumbnailUrl =
+                        cachedOriginal;
+                }
+
+                return;
+            }
+
             string html =
                 await httpClient.GetStringAsync(
                     mod.ResourceUrl);
@@ -366,75 +394,18 @@ namespace BeamNGModManager
                 new Uri(mod.ResourceUrl);
 
             List<string> candidates =
-                ExtractModHubImageUrls(
+                ExtractModHubPhotoUrls(
                     html,
                     resourceUri);
 
-            string[] metaNames =
+            if (candidates.Count == 0)
             {
-                "og:image",
-                "twitter:image",
-                "twitter:image:src"
-            };
-
-            foreach (string metaName in metaNames)
-            {
-                string metaImage =
-                    ExtractMetaContent(
+                candidates =
+                    ExtractModHubImageUrls(
                         html,
-                        metaName);
-
-                if (string.IsNullOrWhiteSpace(
-                    metaImage))
-                {
-                    continue;
-                }
-
-                try
-                {
-                    string absolute =
-                        MakeAbsoluteUrl(
-                            metaImage,
-                            resourceUri);
-
-                    candidates.RemoveAll(url =>
-                        url.Equals(
-                            absolute,
-                            StringComparison.OrdinalIgnoreCase));
-
-                    candidates.Insert(
-                        0,
-                        absolute);
-                }
-                catch
-                {
-                }
-            }
-
-            Match jsonImage =
-                Regex.Match(
-                    html,
-                    "[\\\"']image[\\\"']\\s*:\\s*[\\\"'](?<url>https?://[^\\\"']+)[\\\"']",
-                    RegexOptions.IgnoreCase |
-                    RegexOptions.Singleline);
-
-            if (jsonImage.Success)
-            {
-                string jsonUrl =
-                    WebUtility.HtmlDecode(
-                        jsonImage.Groups["url"].Value)
-                    .Replace(
-                        "\\/",
-                        "/");
-
-                if (!candidates.Contains(
-                    jsonUrl,
-                    StringComparer.OrdinalIgnoreCase))
-                {
-                    candidates.Insert(
-                        0,
-                        jsonUrl);
-                }
+                        resourceUri)
+                    .Where(IsLikelyRealModImage)
+                    .ToList();
             }
 
             foreach (string candidate in candidates)
@@ -456,6 +427,86 @@ namespace BeamNGModManager
 
                 return;
             }
+
+            // Jeśli ulepszenie się nie uda, zostawiamy miniaturę z listy
+            // zamiast ją usuwać lub zastępować błędnym obrazem.
+            mod.ThumbnailUrl =
+                originalThumbnail;
+        }
+
+        private List<string> ExtractModHubPhotoUrls(
+            string html,
+            Uri baseUri)
+        {
+            Regex photoRegex =
+                new Regex(
+                    "(?<url>(?:https://www\\.modhub\\.us)?/uploads/images/photos/[^\\\"'<>\\s]+?\\.(?:webp|jpg|jpeg|png)(?:\\?[^\\\"'<>\\s]*)?)",
+                    RegexOptions.IgnoreCase);
+
+            List<string> urls =
+                new List<string>();
+
+            foreach (Match match in photoRegex.Matches(
+                html))
+            {
+                try
+                {
+                    string absolute =
+                        MakeAbsoluteUrl(
+                            WebUtility.HtmlDecode(
+                                match.Groups["url"].Value),
+                            baseUri);
+
+                    if (!urls.Contains(
+                        absolute,
+                        StringComparer.OrdinalIgnoreCase))
+                    {
+                        urls.Add(
+                            absolute);
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return urls;
+        }
+
+        private bool IsModHubPhotoUrl(
+            string value)
+        {
+            return value.Contains(
+                "/uploads/images/photos/",
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private bool IsLikelyRealModImage(
+            string value)
+        {
+            string lower =
+                value.ToLowerInvariant();
+
+            if (lower.Contains("avatar") ||
+                lower.Contains("profile") ||
+                lower.Contains("user") ||
+                lower.Contains("person") ||
+                lower.Contains("default") ||
+                lower.Contains("placeholder") ||
+                lower.Contains("unknown") ||
+                lower.Contains("no-photo") ||
+                lower.Contains("no_photo") ||
+                lower.Contains("logo") ||
+                lower.Contains("icon"))
+            {
+                return false;
+            }
+
+            return
+                IsModHubPhotoUrl(value) ||
+                lower.Contains("/uploads/") ||
+                lower.Contains("/images/mod") ||
+                lower.Contains("/mods/");
         }
 
         private async Task LoadModHubModDetailsAsync(
