@@ -1149,16 +1149,25 @@ namespace BeamNGModManager
                     StringComparison.OrdinalIgnoreCase))
                 {
                     catalogMod.InstallButtonText =
-                        Localization.T(
-                            "Otwórz ModHub",
-                            "Open ModHub");
+                        installed
+                            ? Localization.T(
+                                "Zainstalowany ✓",
+                                "Installed ✓")
+                            : Localization.T(
+                                "Pobierz",
+                                "Download");
 
                     catalogMod.InstallDetailButtonText =
-                        Localization.T(
-                            "Otwórz stronę pobierania",
-                            "Open download page");
+                        installed
+                            ? Localization.T(
+                                "Zainstalowany ✓",
+                                "Installed ✓")
+                            : Localization.T(
+                                "Pobierz i zainstaluj",
+                                "Download and install");
 
-                    catalogMod.CanInstall = true;
+                    catalogMod.CanInstall =
+                        !installed;
 
                     catalogMod.InstallationStatus =
                         installed
@@ -3119,33 +3128,6 @@ namespace BeamNGModManager
                 return;
             }
 
-            if (mod.Source.Equals(
-                "ModHub",
-                StringComparison.OrdinalIgnoreCase))
-            {
-                try
-                {
-                    OpenModHubPage(
-                        mod);
-
-                    CatalogStatusText.Text =
-                        Localization.T(
-                            "Otwarto stronę pobierania w ModHub: ",
-                            "Opened ModHub download page: ") +
-                        mod.Title;
-                }
-                catch (Exception ex)
-                {
-                    CatalogStatusText.Text =
-                        Localization.T(
-                            "Nie udało się otworzyć ModHub: ",
-                            "Could not open ModHub: ") +
-                        ex.Message;
-                }
-
-                return;
-            }
-
             if (string.IsNullOrWhiteSpace(modsFolder) ||
                 !Directory.Exists(modsFolder))
             {
@@ -3372,7 +3354,8 @@ namespace BeamNGModManager
                             "brak";
 
                         throw new InvalidDataException(
-                            "Repo BeamNG nie zwróciło poprawnego pliku ZIP. " +
+                            mod.Source +
+                            " nie zwrócił poprawnego pliku ZIP. " +
                             "Stan archiwum: " +
                             zipStatus +
                             ". Typ odpowiedzi: " +
@@ -3575,7 +3558,7 @@ namespace BeamNGModManager
                 null;
 
             for (int attempt = 0;
-                attempt < 5;
+                attempt < 8;
                 attempt++)
             {
                 using HttpRequestMessage request =
@@ -3610,7 +3593,9 @@ namespace BeamNGModManager
                     throw new HttpRequestException(
                         "HTTP " +
                         statusCode +
-                        " podczas pobierania z Repo BeamNG. Adres: " +
+                        " podczas pobierania z " +
+                        source +
+                        ". Adres: " +
                         failedUrl);
                 }
 
@@ -3707,52 +3692,126 @@ namespace BeamNGModManager
                 patterns.Add(
                     "href=[\\\"'](?<url>[^\\\"']*(?:download|downloads)[^\\\"']*)[\\\"']");
             }
+            else if (source == "ModHub")
+            {
+                // ModHub często przekazuje plik do zewnętrznego hostingu.
+                // Najpierw szukamy odnośników oznaczonych jako pobieranie.
+                patterns.Add(
+                    "<a\\b[^>]*(?:class|id)=[\\\"'][^\\\"']*download[^\\\"']*[\\\"'][^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"']");
+
+                patterns.Add(
+                    "<a\\b[^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*(?:class|id)=[\\\"'][^\\\"']*download[^\\\"']*[\\\"']");
+
+                patterns.Add(
+                    "<a\\b[^>]*href=[\\\"'](?<url>https?://[^\\\"']+)[\\\"'][^>]*>\\s*(?:<[^>]+>\\s*)*(?:Download|Direct Download|Pobierz)");
+
+                // Popularne zewnętrzne hostingi spotykane na stronach z modami.
+                patterns.Add(
+                    "(?:href|data-href|data-url|data-download|value|action)=[\\\"'](?<url>https?://(?:www\\.)?(?:modsfire\\.com|mediafire\\.com|sharemods\\.com|modsbase\\.com|workupload\\.com|pixeldrain\\.com|gofile\\.io|files\\.fm|dropbox\\.com|drive\\.google\\.com|mega\\.nz)/[^\\\"']+)[\\\"']");
+
+                patterns.Add(
+                    "(?<url>https?://(?:www\\.)?(?:modsfire\\.com|mediafire\\.com|sharemods\\.com|modsbase\\.com|workupload\\.com|pixeldrain\\.com|gofile\\.io|files\\.fm|dropbox\\.com|drive\\.google\\.com|mega\\.nz)/[^\\s\\\"'<>\\\\]+)");
+            }
+
+            // Typowe przyciski bez względu na hosting.
+            patterns.Add(
+                "<a\\b[^>]*download(?:=[^>]*)?[^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"']");
 
             patterns.Add(
-                "href=[\\\"'](?<url>[^\\\"']+\\.zip(?:\\?[^\\\"']*)?)[\\\"']");
+                "<a\\b[^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*download(?:=[^>]*)?>");
+
+            patterns.Add(
+                "(?:href|data-href|data-url|data-download|action)=[\\\"'](?<url>[^\\\"']*(?:/download(?:/|\\?|$)|/downloads/)[^\\\"']*)[\\\"']");
+
+            // Bezpośredni ZIP ma najwyższą wartość, jeśli pojawia się na stronie hostingu.
+            patterns.Add(
+                "(?:href|data-href|data-url|value|action)=[\\\"'](?<url>[^\\\"']+\\.zip(?:\\?[^\\\"']*)?)[\\\"']");
+
+            // Linki generowane przez skrypty / JSON.
+            patterns.Add(
+                "[\\\"'](?:downloadUrl|download_url|directUrl|direct_url|fileUrl|file_url)[\\\"']\\s*:\\s*[\\\"'](?<url>https?://[^\\\"']+)[\\\"']");
+
+            patterns.Add(
+                "(?:window\\.)?location(?:\\.href)?\\s*=\\s*[\\\"'](?<url>https?://[^\\\"']+)[\\\"']");
 
             foreach (string pattern in patterns)
             {
-                Match match =
-                    Regex.Match(
-                        html,
-                        pattern,
-                        RegexOptions.IgnoreCase);
-
-                if (!match.Success)
+                foreach (Match match in Regex.Matches(
+                    html,
+                    pattern,
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline))
                 {
-                    continue;
-                }
+                    string href =
+                        WebUtility.HtmlDecode(
+                            match.Groups["url"].Value)
+                        .Replace(
+                            "\\/",
+                            "/")
+                        .Trim();
 
-                string href =
-                    WebUtility.HtmlDecode(
-                        match.Groups["url"].Value);
+                    if (string.IsNullOrWhiteSpace(href) ||
+                        href.StartsWith(
+                            "javascript:",
+                            StringComparison.OrdinalIgnoreCase) ||
+                        href.StartsWith(
+                            "mailto:",
+                            StringComparison.OrdinalIgnoreCase) ||
+                        href.StartsWith(
+                            "#",
+                            StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
 
-                if (href.Contains(
-                    "/add",
-                    StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
+                    Uri candidate;
 
-                if (Uri.TryCreate(
-                    href,
-                    UriKind.Absolute,
-                    out Uri? absoluteUri))
-                {
-                    return absoluteUri;
-                }
+                    if (Uri.TryCreate(
+                        href,
+                        UriKind.Absolute,
+                        out Uri? absoluteUri))
+                    {
+                        candidate =
+                            absoluteUri;
+                    }
+                    else
+                    {
+                        try
+                        {
+                            candidate =
+                                new Uri(
+                                    MakeAbsoluteUrl(
+                                        href,
+                                        baseUri));
+                        }
+                        catch
+                        {
+                            continue;
+                        }
+                    }
 
-                try
-                {
-                    return new Uri(
-                        MakeAbsoluteUrl(
-                            href,
-                            baseUri));
-                }
-                catch
-                {
-                    continue;
+                    if (candidate == baseUri)
+                    {
+                        continue;
+                    }
+
+                    string host =
+                        candidate.Host
+                            .ToLowerInvariant();
+
+                    if (host.Contains("doubleclick") ||
+                        host.Contains("googlesyndication") ||
+                        host.Contains("googleadservices") ||
+                        host.Contains("facebook.com") ||
+                        host.Contains("instagram.com") ||
+                        host.Contains("twitter.com") ||
+                        host.Contains("x.com") ||
+                        host.Contains("tiktok.com"))
+                    {
+                        continue;
+                    }
+
+                    return candidate;
                 }
             }
 
