@@ -3753,6 +3753,27 @@ namespace BeamNGModManager
                         "html",
                         StringComparison.OrdinalIgnoreCase))
                 {
+                    if (source == "ModHub" &&
+                        !string.IsNullOrWhiteSpace(mediaType) &&
+                        (mediaType.StartsWith(
+                             "image/",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         mediaType.StartsWith(
+                             "font/",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         mediaType.Equals(
+                             "text/css",
+                             StringComparison.OrdinalIgnoreCase) ||
+                         mediaType.Contains(
+                             "javascript",
+                             StringComparison.OrdinalIgnoreCase)))
+                    {
+                        response.Dispose();
+
+                        throw new InvalidOperationException(
+                            "Strona wskazała zasób statyczny zamiast pliku moda.");
+                    }
+
                     return response;
                 }
 
@@ -4104,6 +4125,7 @@ namespace BeamNGModManager
                 host.Contains("twitter.com") ||
                 host.Contains("x.com") ||
                 host.Contains("tiktok.com") ||
+                host.Contains("gstatic.com") ||
                 host.Equals(
                     "accounts.google.com",
                     StringComparison.OrdinalIgnoreCase) ||
@@ -4114,15 +4136,58 @@ namespace BeamNGModManager
                 return true;
             }
 
-            if (source == "ModHub" &&
-                (path.Contains("/category/") ||
-                 path.Contains("/filter/") ||
-                 path.Contains("/sort/") ||
-                 path.Contains("/search") ||
-                 path.Contains("/user/") ||
-                 path.Contains("/media")))
+            if (source == "ModHub")
             {
-                return true;
+                bool isModHubHost =
+                    host.Equals(
+                        "modhub.us",
+                        StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(
+                        ".modhub.us",
+                        StringComparison.OrdinalIgnoreCase);
+
+                bool isKnownFileHost =
+                    host.Equals("modsfire.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".modsfire.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("mods.to", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".mods.to", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("mediafire.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".mediafire.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("sharemods.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".sharemods.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("modsbase.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".modsbase.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("workupload.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".workupload.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("pixeldrain.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".pixeldrain.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("gofile.io", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".gofile.io", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("files.fm", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".files.fm", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("dropbox.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".dropbox.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("drive.google.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("mega.nz", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".mega.nz", StringComparison.OrdinalIgnoreCase) ||
+                    host.Equals("beamngland.com", StringComparison.OrdinalIgnoreCase) ||
+                    host.EndsWith(".beamngland.com", StringComparison.OrdinalIgnoreCase);
+
+                if (!isModHubHost &&
+                    !isKnownFileHost)
+                {
+                    return true;
+                }
+
+                if (path.Contains("/category/") ||
+                    path.Contains("/filter/") ||
+                    path.Contains("/sort/") ||
+                    path.Contains("/search") ||
+                    path.Contains("/user/") ||
+                    path.Contains("/media"))
+                {
+                    return true;
+                }
             }
 
             if (path.Contains("/download-photo/") ||
