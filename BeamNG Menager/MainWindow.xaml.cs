@@ -3867,14 +3867,17 @@ namespace BeamNGModManager
                     "(?:href|action|data-[A-Za-z0-9_-]+)=[\\\"'](?<url>/(?:mod/)?(?:download|file|redirect|out|go)(?:[-_/][^\\\"']*)?)[\\\"']");
             }
 
-            patterns.Add(
-                "<a\\b[^>]*download(?:=[^>]*)?[^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"']");
+            if (source != "ModHub")
+            {
+                patterns.Add(
+                    "<a\\b[^>]*download(?:=[^>]*)?[^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"']");
 
-            patterns.Add(
-                "<a\\b[^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*download(?:=[^>]*)?>");
+                patterns.Add(
+                    "<a\\b[^>]*href=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*download(?:=[^>]*)?>");
 
-            patterns.Add(
-                "(?:href|data-href|data-url|data-download|action)=[\\\"'](?<url>[^\\\"']*(?:/download(?:/|\\?|$)|/downloads/)[^\\\"']*)[\\\"']");
+                patterns.Add(
+                    "(?:href|data-href|data-url|data-download|action)=[\\\"'](?<url>[^\\\"']*(?:/download(?:/|\\?|$)|/downloads/)[^\\\"']*)[\\\"']");
+            }
 
             patterns.Add(
                 "(?:href|data-href|data-url|value|action)=[\\\"'](?<url>[^\\\"']+\\.zip(?:\\?[^\\\"']*)?)[\\\"']");
@@ -3882,8 +3885,11 @@ namespace BeamNGModManager
             patterns.Add(
                 "[\\\"'](?:downloadUrl|download_url|directUrl|direct_url|fileUrl|file_url)[\\\"']\\s*:\\s*[\\\"'](?<url>https?://[^\\\"']+)[\\\"']");
 
-            patterns.Add(
-                "(?:window\\.)?location(?:\\.href)?\\s*=\\s*[\\\"'](?<url>https?://[^\\\"']+)[\\\"']");
+            if (source != "ModHub")
+            {
+                patterns.Add(
+                    "(?:window\\.)?location(?:\\.href)?\\s*=\\s*[\\\"'](?<url>https?://[^\\\"']+)[\\\"']");
+            }
 
             foreach (string pattern in patterns)
             {
@@ -4083,6 +4089,17 @@ namespace BeamNGModManager
                 return true;
             }
 
+            if (source == "ModHub" &&
+                (path.Contains("/category/") ||
+                 path.Contains("/filter/") ||
+                 path.Contains("/sort/") ||
+                 path.Contains("/search") ||
+                 path.Contains("/user/") ||
+                 path.Contains("/media")))
+            {
+                return true;
+            }
+
             if (path.Contains("/download-photo/") ||
                 path.Contains("/photo/") ||
                 path.Contains("/photos/") ||
@@ -4105,21 +4122,10 @@ namespace BeamNGModManager
                     StringComparison.OrdinalIgnoreCase))
             {
                 bool validInternalDownload =
-                    path.Contains(
-                        "download",
-                        StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains(
-                        "/file",
-                        StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains(
-                        "/redirect",
-                        StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains(
-                        "/out",
-                        StringComparison.OrdinalIgnoreCase) ||
-                    path.Contains(
-                        "/go",
-                        StringComparison.OrdinalIgnoreCase);
+                    Regex.IsMatch(
+                        path,
+                        @"^/(?:mod/)?(?:download|file|redirect|out|go)(?:/|$)",
+                        RegexOptions.IgnoreCase);
 
                 if (!validInternalDownload)
                 {
