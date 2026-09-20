@@ -230,18 +230,15 @@ namespace BeamNGModManager
         private async Task EnhanceModHubCatalogAsync(
             List<CatalogMod> mods)
         {
-            // Nie pobieramy od razu stron szczegółów każdego moda.
-            // To wcześniej powodowało dziesiątki żądań i konwersji obrazów
-            // jednocześnie, co potrafiło zablokować interfejs WPF.
-            // Na liście pobieramy tylko miniaturę już znalezioną na stronie kategorii.
+            // ModHub ładuje obrazy w sposób, którego nie da się niezawodnie
+            // odczytać z samej listy kategorii. Pobieramy więc tylko metadane
+            // obrazka z konkretnej strony moda. Robimy to maksymalnie po 2
+            // naraz, bez pobierania całej galerii, żeby nie blokować interfejsu.
             using SemaphoreSlim thumbnailLimit =
-                new SemaphoreSlim(3);
+                new SemaphoreSlim(2);
 
             Task[] tasks =
                 mods
-                    .Where(mod =>
-                        !string.IsNullOrWhiteSpace(
-                            mod.ThumbnailUrl))
                     .Select(
                         async mod =>
                         {
@@ -249,18 +246,8 @@ namespace BeamNGModManager
 
                             try
                             {
-                                string cached =
-                                    await CacheRemoteImageAsync(
-                                        mod.ThumbnailUrl,
-                                        mod.ResourceUrl,
-                                        "modhub-thumbs");
-
-                                if (!string.IsNullOrWhiteSpace(
-                                    cached))
-                                {
-                                    mod.ThumbnailUrl =
-                                        cached;
-                                }
+                                await LoadModHubThumbnailAsync(
+                                    mod);
                             }
                             catch
                             {
@@ -275,6 +262,109 @@ namespace BeamNGModManager
 
             await Task.WhenAll(
                 tasks);
+        }
+
+        private async Task LoadModHubThumbnailAsync(
+            CatalogMod mod)
+        {
+            string html =
+                await httpClient.GetStringAsync(
+                    mod.ResourceUrl);
+
+            Uri resourceUri =
+                new Uri(mod.ResourceUrl);
+
+            List<string> candidates =
+                ExtractModHubImageUrls(
+                    html,
+                    resourceUri);
+
+            string[] metaNames =
+            {
+                "og:image",
+                "twitter:image",
+                "twitter:image:src"
+            };
+
+            foreach (string metaName in metaNames)
+            {
+                string metaImage =
+                    ExtractMetaContent(
+                        html,
+                        metaName);
+
+                if (string.IsNullOrWhiteSpace(
+                    metaImage))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    string absolute =
+                        MakeAbsoluteUrl(
+                            metaImage,
+                            resourceUri);
+
+                    candidates.RemoveAll(url =>
+                        url.Equals(
+                            absolute,
+                            StringComparison.OrdinalIgnoreCase));
+
+                    candidates.Insert(
+                        0,
+                        absolute);
+                }
+                catch
+                {
+                }
+            }
+
+            Match jsonImage =
+                Regex.Match(
+                    html,
+                    "[\\\"']image[\\\"']\\s*:\\s*[\\\"'](?<url>https?://[^\\\"']+)[\\\"']",
+                    RegexOptions.IgnoreCase |
+                    RegexOptions.Singleline);
+
+            if (jsonImage.Success)
+            {
+                string jsonUrl =
+                    WebUtility.HtmlDecode(
+                        jsonImage.Groups["url"].Value)
+                    .Replace(
+                        "\\/",
+                        "/");
+
+                if (!candidates.Contains(
+                    jsonUrl,
+                    StringComparer.OrdinalIgnoreCase))
+                {
+                    candidates.Insert(
+                        0,
+                        jsonUrl);
+                }
+            }
+
+            foreach (string candidate in candidates)
+            {
+                string cached =
+                    await CacheRemoteImageAsync(
+                        candidate,
+                        mod.ResourceUrl,
+                        "modhub-thumbs");
+
+                if (string.IsNullOrWhiteSpace(
+                    cached))
+                {
+                    continue;
+                }
+
+                mod.ThumbnailUrl =
+                    cached;
+
+                return;
+            }
         }
 
         private async Task LoadModHubModDetailsAsync(
@@ -439,7 +529,7 @@ namespace BeamNGModManager
 
             Regex imageRegex =
                 new Regex(
-                    "<img\\b[^>]*(?:src|data-src|data-original|data-lazy-src)=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*>",
+                    "<(?:img|source)\\b[^>]*(?:src|data-src|data-original|data-lazy-src|srcset|data-srcset)=[\\\"'](?<url>[^\\\"']+)[\\\"'][^>]*>",
                     RegexOptions.IgnoreCase |
                     RegexOptions.Singleline);
 
@@ -449,6 +539,24 @@ namespace BeamNGModManager
                     WebUtility.HtmlDecode(
                         match.Groups["url"].Value)
                     .Trim();
+
+                if (value.Contains(','))
+                {
+                    value =
+                        value.Split(',')[0]
+                            .Trim();
+                }
+
+                int descriptorSeparator =
+                    value.IndexOf(' ');
+
+                if (descriptorSeparator > 0)
+                {
+                    value =
+                        value.Substring(
+                            0,
+                            descriptorSeparator);
+                }
 
                 string lower =
                     value.ToLowerInvariant();
