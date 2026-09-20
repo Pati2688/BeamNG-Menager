@@ -1,4 +1,5 @@
 using Microsoft.Win32;
+using ImageSharpImage = SixLabors.ImageSharp.Image;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -2512,12 +2513,65 @@ namespace BeamNGModManager
                         cacheDirectory,
                         hash + ".*");
 
-                if (existing.Length > 0 &&
-                    new FileInfo(existing[0]).Length > 0)
+                foreach (string cachedFile in existing)
                 {
-                    return new Uri(
-                        existing[0])
-                        .AbsoluteUri;
+                    if (new FileInfo(cachedFile).Length <= 0)
+                    {
+                        continue;
+                    }
+
+                    string cachedExtension =
+                        Path.GetExtension(cachedFile)
+                            .ToLowerInvariant();
+
+                    if (cachedExtension != ".webp")
+                    {
+                        return new Uri(
+                            cachedFile)
+                            .AbsoluteUri;
+                    }
+
+                    // WPF nie dekoduje WebP niezawodnie na wszystkich
+                    // instalacjach Windows. Stary cache WebP konwertujemy
+                    // do PNG, dzięki czemu Image w XAML zawsze go pokaże.
+                    try
+                    {
+                        string convertedFile =
+                            Path.Combine(
+                                cacheDirectory,
+                                hash + ".png");
+
+                        using ImageSharpImage image =
+                            ImageSharpImage.Load(
+                                cachedFile);
+
+                        image.SaveAsPng(
+                            convertedFile);
+
+                        try
+                        {
+                            File.Delete(
+                                cachedFile);
+                        }
+                        catch
+                        {
+                        }
+
+                        return new Uri(
+                            convertedFile)
+                            .AbsoluteUri;
+                    }
+                    catch
+                    {
+                        try
+                        {
+                            File.Delete(
+                                cachedFile);
+                        }
+                        catch
+                        {
+                        }
+                    }
                 }
 
                 using HttpRequestMessage request =
@@ -2533,6 +2587,9 @@ namespace BeamNGModManager
                     request.Headers.Referrer =
                         referrer;
                 }
+
+                request.Headers.Accept.ParseAdd(
+                    "image/avif,image/webp,image/png,image/jpeg,image/*,*/*;q=0.8");
 
                 using HttpResponseMessage response =
                     await downloadClient.SendAsync(
@@ -2558,36 +2615,68 @@ namespace BeamNGModManager
                 string? mediaType =
                     response.Content.Headers
                         .ContentType?
-                        .MediaType;
+                        .MediaType?
+                        .ToLowerInvariant();
 
-                if (mediaType ==
-                    "image/jpeg")
+                bool isWebP =
+                    mediaType == "image/webp" ||
+                    extension == ".webp" ||
+                    LooksLikeWebPImage(bytes);
+
+                if (isWebP)
+                {
+                    string pngFile =
+                        Path.Combine(
+                            cacheDirectory,
+                            hash + ".png");
+
+                    using ImageSharpImage image =
+                        ImageSharpImage.Load(
+                            bytes);
+
+                    image.SaveAsPng(
+                        pngFile);
+
+                    return new Uri(
+                        pngFile)
+                        .AbsoluteUri;
+                }
+
+                if (mediaType == "image/jpeg")
                 {
                     extension = ".jpg";
                 }
-                else if (mediaType ==
-                    "image/png")
+                else if (mediaType == "image/png")
                 {
                     extension = ".png";
                 }
-                else if (mediaType ==
-                    "image/gif")
+                else if (mediaType == "image/gif")
                 {
                     extension = ".gif";
-                }
-                else if (mediaType ==
-                    "image/webp")
-                {
-                    extension = ".webp";
                 }
 
                 if (extension != ".jpg" &&
                     extension != ".jpeg" &&
                     extension != ".png" &&
-                    extension != ".gif" &&
-                    extension != ".webp")
+                    extension != ".gif")
                 {
-                    extension = ".jpg";
+                    // Jeśli serwer nie poda rozszerzenia, ImageSharp
+                    // rozpozna format i zapisze go jako PNG dla WPF.
+                    string pngFile =
+                        Path.Combine(
+                            cacheDirectory,
+                            hash + ".png");
+
+                    using ImageSharpImage image =
+                        ImageSharpImage.Load(
+                            bytes);
+
+                    image.SaveAsPng(
+                        pngFile);
+
+                    return new Uri(
+                        pngFile)
+                        .AbsoluteUri;
                 }
 
                 string cacheFile =
@@ -2608,6 +2697,20 @@ namespace BeamNGModManager
             {
                 return "";
             }
+        }
+
+        private bool LooksLikeWebPImage(
+            byte[] bytes)
+        {
+            return bytes.Length >= 12 &&
+                bytes[0] == (byte)'R' &&
+                bytes[1] == (byte)'I' &&
+                bytes[2] == (byte)'F' &&
+                bytes[3] == (byte)'F' &&
+                bytes[8] == (byte)'W' &&
+                bytes[9] == (byte)'E' &&
+                bytes[10] == (byte)'B' &&
+                bytes[11] == (byte)'P';
         }
 
         private string MakeAbsoluteUrl(
