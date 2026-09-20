@@ -643,23 +643,54 @@
 
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
-                    <ColumnDefinition Width="285"/>
+                    <ColumnDefinition Width="170"/>
+                    <ColumnDefinition Width="250"/>
                     <ColumnDefinition Width="210"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
                 <StackPanel>
-                    <TextBlock Text="Repo BeamNG"
+                    <TextBlock x:Name="CatalogTitleText"
+                               Text="Repo BeamNG"
                                FontSize="27"
                                FontWeight="Bold"/>
 
-                    <TextBlock Text="Pełne Repo BeamNG — kolejne strony doczytują się podczas przewijania"
+                    <TextBlock x:Name="CatalogSubtitleText"
+                               Text="Pełne Repo BeamNG — kolejne strony doczytują się podczas przewijania"
                                Foreground="{StaticResource TextMutedBrush}"
                                FontSize="13"
                                Margin="0,4,0,0"/>
                 </StackPanel>
 
                 <Border Grid.Column="1"
+                        Height="38"
+                        Background="#171A21"
+                        BorderBrush="{StaticResource BorderBrushSoft}"
+                        BorderThickness="1"
+                        CornerRadius="8"
+                        Margin="0,0,10,0"
+                        VerticalAlignment="Center">
+
+                    <ComboBox x:Name="CatalogSourceComboBox"
+                              Background="#171A21"
+                              Foreground="#111318"
+                              BorderThickness="0"
+                              Padding="9,6"
+                              FontSize="13"
+                              ItemContainerStyle="{StaticResource DarkComboBoxItemStyle}"
+                              SelectedIndex="0"
+                              SelectionChanged="CatalogSourceComboBox_SelectionChanged">
+
+                        <ComboBoxItem Content="Repo BeamNG"
+                                      Tag="beamng"/>
+                        <ComboBoxItem Content="ModHub"
+                                      Tag="modhub"/>
+
+                    </ComboBox>
+
+                </Border>
+
+                <Border Grid.Column="2"
                         Height="38"
                         Background="#171A21"
                         BorderBrush="{StaticResource BorderBrushSoft}"
@@ -680,7 +711,7 @@
 
                 </Border>
 
-                <Border Grid.Column="2"
+                <Border Grid.Column="3"
                         Height="38"
                         Background="#171A21"
                         BorderBrush="{StaticResource BorderBrushSoft}"
@@ -711,7 +742,7 @@
                 </Border>
 
                 <Button x:Name="RefreshCatalogButton"
-                        Grid.Column="3"
+                        Grid.Column="4"
                         Content="Odśwież"
                         Style="{StaticResource PrimaryButtonStyle}"
                         Width="140"
