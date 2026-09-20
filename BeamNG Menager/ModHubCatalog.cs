@@ -109,20 +109,23 @@ namespace BeamNGModManager
 
             foreach (Match match in linkRegex.Matches(html))
             {
-                string absoluteUrl;
+                string slug =
+                    WebUtility.UrlDecode(
+                        match.Groups["slug"].Value)
+                    .Trim()
+                    .Trim('/');
 
-                try
-                {
-                    absoluteUrl =
-                        MakeAbsoluteUrl(
-                            WebUtility.HtmlDecode(
-                                match.Groups["url"].Value),
-                            pageUri);
-                }
-                catch
+                if (string.IsNullOrWhiteSpace(slug))
                 {
                     continue;
                 }
+
+                // Nie polegamy tutaj na ogólnym resolverze URL.
+                // Dla ModHub budujemy kanoniczny adres strony moda bezpośrednio
+                // z przechwyconego sluga, żeby ResourceUrl nigdy nie stał się "/".
+                string absoluteUrl =
+                    BuildModHubResourceUrlFromSlug(
+                        slug);
 
                 if (!matchesByUrl.TryGetValue(
                     absoluteUrl,
@@ -234,6 +237,50 @@ namespace BeamNGModManager
             }
 
             return result;
+        }
+
+        private string BuildModHubResourceUrlFromSlug(
+            string slug)
+        {
+            return
+                "https://www.modhub.us/beamng-drive-mods/" +
+                slug.Trim().Trim('/');
+        }
+
+        private string ResolveModHubResourceUrl(
+            CatalogMod mod)
+        {
+            if (Uri.TryCreate(
+                    mod.ResourceUrl,
+                    UriKind.Absolute,
+                    out Uri? existing) &&
+                existing.Host.EndsWith(
+                    "modhub.us",
+                    StringComparison.OrdinalIgnoreCase) &&
+                existing.AbsolutePath.StartsWith(
+                    "/beamng-drive-mods/",
+                    StringComparison.OrdinalIgnoreCase) &&
+                existing.AbsolutePath.Length >
+                    "/beamng-drive-mods/".Length)
+            {
+                return existing.ToString();
+            }
+
+            string slug =
+                WebUtility.HtmlDecode(
+                    mod.Title)
+                .ToLowerInvariant();
+
+            slug =
+                Regex.Replace(
+                    slug,
+                    @"[^a-z0-9]+",
+                    "-")
+                .Trim('-');
+
+            return
+                BuildModHubResourceUrlFromSlug(
+                    slug);
         }
 
         private string ExtractModHubImageAlt(
