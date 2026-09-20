@@ -25,8 +25,26 @@ namespace BeamNGModManager
                 string formHtml =
                     formMatch.Value;
 
+                int contextStart =
+                    Math.Max(
+                        0,
+                        formMatch.Index - 180);
+
+                int contextLength =
+                    Math.Min(
+                        html.Length - contextStart,
+                        formMatch.Length + 420);
+
+                string nearbyContext =
+                    html.Substring(
+                        contextStart,
+                        contextLength);
+
                 string lower =
-                    formHtml.ToLowerInvariant();
+                    (formHtml +
+                     " " +
+                     nearbyContext)
+                    .ToLowerInvariant();
 
                 bool downloadForm =
                     lower.Contains("modsfire.com") ||
@@ -115,11 +133,6 @@ namespace BeamNGModManager
                             inputAttrs,
                             "name");
 
-                    if (string.IsNullOrWhiteSpace(name))
-                    {
-                        continue;
-                    }
-
                     string type =
                         GetModHubHtmlAttribute(
                             inputAttrs,
@@ -139,17 +152,45 @@ namespace BeamNGModManager
                     }
 
                     if (type.Equals(
+                        "image",
+                        StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!string.IsNullOrWhiteSpace(name))
+                        {
+                            submitFields.Add(
+                                new KeyValuePair<string, string>(
+                                    name + ".x",
+                                    "1"));
+
+                            submitFields.Add(
+                                new KeyValuePair<string, string>(
+                                    name + ".y",
+                                    "1"));
+                        }
+
+                        continue;
+                    }
+
+                    if (type.Equals(
                             "submit",
                             StringComparison.OrdinalIgnoreCase) ||
                         type.Equals(
                             "button",
                             StringComparison.OrdinalIgnoreCase))
                     {
-                        submitFields.Add(
-                            new KeyValuePair<string, string>(
-                                name,
-                                value));
+                        if (!string.IsNullOrWhiteSpace(name))
+                        {
+                            submitFields.Add(
+                                new KeyValuePair<string, string>(
+                                    name,
+                                    value));
+                        }
 
+                        continue;
+                    }
+
+                    if (string.IsNullOrWhiteSpace(name))
+                    {
                         continue;
                     }
 
@@ -213,9 +254,53 @@ namespace BeamNGModManager
                 }
                 else
                 {
+                    HashSet<string> handledImagePrefixes =
+                        new HashSet<string>(
+                            StringComparer.OrdinalIgnoreCase);
+
                     foreach (KeyValuePair<string, string> submitField
                         in submitFields)
                     {
+                        string key =
+                            submitField.Key;
+
+                        if (key.EndsWith(
+                            ".x",
+                            StringComparison.OrdinalIgnoreCase) ||
+                            key.EndsWith(
+                            ".y",
+                            StringComparison.OrdinalIgnoreCase))
+                        {
+                            string prefix =
+                                key.Substring(
+                                    0,
+                                    key.Length - 2);
+
+                            if (!handledImagePrefixes.Add(prefix))
+                            {
+                                continue;
+                            }
+
+                            List<KeyValuePair<string, string>> imageFields =
+                                new List<KeyValuePair<string, string>>(
+                                    commonFields);
+
+                            imageFields.Add(
+                                new KeyValuePair<string, string>(
+                                    prefix + ".x",
+                                    "1"));
+
+                            imageFields.Add(
+                                new KeyValuePair<string, string>(
+                                    prefix + ".y",
+                                    "1"));
+
+                            attempts.Add(
+                                imageFields);
+
+                            continue;
+                        }
+
                         List<KeyValuePair<string, string>> fields =
                             new List<KeyValuePair<string, string>>(
                                 commonFields);
